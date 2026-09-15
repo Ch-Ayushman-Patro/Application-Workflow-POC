@@ -480,36 +480,95 @@ export default function ApplicationDetail() {
             </CardContent>
           </Card>
 
-          {/* SLA Performance Metrics */}
+          {/* SLA Performance & Elapsed Time Split (Requirement e) */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">SLA & Timing Intelligence</CardTitle>
+              <div>
+                <CardTitle className="text-sm">Elapsed Time Split & Bottlenecks</CardTitle>
+                <CardDescription>Human work duration vs. wait time between tasks</CardDescription>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
-                <div className="text-[11px] text-slate-500 font-medium">Total Pipeline Age</div>
-                <div className="text-xl font-bold text-slate-900">{ageHours} Hours</div>
-                <div className="text-[11px] text-slate-500">
-                  {ageHours > 48 
-                    ? "Exceeded 48h SLA threshold" 
-                    : ageHours > 24 
-                    ? "Approaching 48h escalation threshold" 
-                    : "Within standard 24h review SLA"}
-                </div>
-              </div>
+              {/* Calculated Split Metrics */}
+              {(() => {
+                const createdTime = new Date(application.created_at).getTime();
+                const claimedTime = application.claimed_at ? new Date(application.claimed_at).getTime() : null;
+                const endTime = application.completed_at ? new Date(application.completed_at).getTime() : Date.now();
+                
+                let waitHours = 0;
+                let humanHours = 0;
 
-              <div className="space-y-2 text-xs text-slate-600">
+                if (claimedTime) {
+                  waitHours = Math.max(0, Number(((claimedTime - createdTime) / (1000 * 3600)).toFixed(1)));
+                  humanHours = Math.max(0, Number(((endTime - claimedTime) / (1000 * 3600)).toFixed(1)));
+                } else {
+                  waitHours = Math.max(0, Number(((endTime - createdTime) / (1000 * 3600)).toFixed(1)));
+                  humanHours = 0;
+                }
+
+                const totalCalcHours = Number((waitHours + humanHours).toFixed(1));
+                const waitPct = totalCalcHours > 0 ? Math.round((waitHours / totalCalcHours) * 100) : 0;
+                const humanPct = 100 - waitPct;
+
+                return (
+                  <div className="space-y-3.5">
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-700">Overall Elapsed Time</span>
+                        <span className="font-mono font-bold text-slate-900">{totalCalcHours} Hours</span>
+                      </div>
+
+                      {/* Visual Ratio Bar */}
+                      <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden flex">
+                        <div 
+                          style={{ width: `${humanPct}%` }}
+                          className="bg-indigo-600 h-full transition-all"
+                          title={`Time spent by human: ${humanHours}h (${humanPct}%)`}
+                        />
+                        <div 
+                          style={{ width: `${waitPct}%` }}
+                          className="bg-amber-500 h-full transition-all"
+                          title={`Wait time between tasks: ${waitHours}h (${waitPct}%)`}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] pt-1">
+                        <span className="text-indigo-700 font-medium">
+                          Human Work: <strong>{humanHours}h</strong> ({humanPct}%)
+                        </span>
+                        <span className="text-amber-800 font-medium">
+                          Wait Time: <strong>{waitHours}h</strong> ({waitPct}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-100 text-[11px] text-indigo-900 leading-relaxed">
+                      {waitPct > 50 ? (
+                        <span>
+                          <strong className="text-amber-900">Wait Time Dominant:</strong> This case spent {waitPct}% of its lifecycle waiting in queue before handover, identifying an intake/handover bottleneck.
+                        </span>
+                      ) : (
+                        <span>
+                          <strong className="text-indigo-900">Active Review Dominant:</strong> Human processing accounts for {humanPct}% of overall elapsed time.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-2 text-xs text-slate-600 pt-1 border-t border-slate-100">
                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
                   <span>Unclaimed SLA Threshold</span>
-                  <span className="font-semibold text-slate-800">24 Hours</span>
+                  <span className="font-semibold text-slate-800">24 Hours (Admin Task)</span>
                 </div>
                 <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
                   <span>Follow-Up SLA Threshold</span>
-                  <span className="font-semibold text-slate-800">24 Hours</span>
+                  <span className="font-semibold text-slate-800">24 Hours (Claimed User)</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Escalation SLA Threshold</span>
-                  <span className="font-semibold text-rose-600">48 Hours</span>
+                  <span className="font-semibold text-rose-600">48 Hours (Manager Alert)</span>
                 </div>
               </div>
             </CardContent>
