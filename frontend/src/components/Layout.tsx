@@ -146,7 +146,7 @@ export default function Layout() {
         </nav>
 
         {/* Action Trigger Card */}
-        <div className="p-3.5 mx-3 mb-3 bg-gradient-to-br from-slate-900 to-indigo-950/40 rounded-2xl border border-indigo-900/30">
+        <div className="p-3.5 mx-3 mb-3 bg-linear-to-br from-slate-900 to-indigo-950/40 rounded-2xl border border-indigo-900/30">
           <div className="flex items-center gap-2 mb-1.5">
             <Play className="w-3.5 h-3.5 text-indigo-400 fill-current" />
             <span className="text-xs font-semibold text-slate-200">Trigger Orchestration</span>
