@@ -277,7 +277,7 @@ export default function ApplicationDetail() {
                     <span className="text-xs font-bold text-slate-900">{step.label}</span>
                     {isDone ? (
                       <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <Check className="w-3 h-3 stroke-[3]" />
+                        <Check className="w-3 h-3 stroke-3" />
                       </span>
                     ) : isCurr ? (
                       <span className={`w-2.5 h-2.5 rounded-full animate-ping ${hasEscalation ? "bg-rose-500" : "bg-indigo-600"}`} />
