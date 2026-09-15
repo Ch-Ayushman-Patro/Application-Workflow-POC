@@ -4,6 +4,8 @@ This is a proof-of-concept (POC) demonstrating an Application Workflow Monitorin
 
 ## Architecture
 
+Detailed endpoint specifications, schemas, rules, and examples are documented in [`.docs/API.md`](.docs/API.md).
+
 The system uses a modern web stack:
 - **Backend**: Python, FastAPI, Pydantic, SQLAlchemy, Neon DB (PostgreSQL)
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, Recharts

@@ -72,3 +72,6 @@ Thumbs.db
 
 # Startup Scripts
 start.bat
+
+#Documentation Files
+.docs/

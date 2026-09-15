@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Application, Task, User, AnalyticsSummary, ApplicationEvent } from '../types';
+import type { Application, Task, User, AnalyticsSummary, ApplicationEvent } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
