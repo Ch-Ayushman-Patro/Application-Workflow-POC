@@ -82,7 +82,7 @@ export default function Layout() {
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800/80">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-sm shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-9 h-9 rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-sm shadow-indigo-500/20 group-hover:scale-105 transition-transform">
               <Workflow className="w-5 h-5" />
             </div>
             <div>
