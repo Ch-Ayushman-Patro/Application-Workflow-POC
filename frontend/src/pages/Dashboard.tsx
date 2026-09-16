@@ -6,27 +6,22 @@ import {
   getAnalyticsSummary 
 } from "../services/api";
 import type { Application, Task, AnalyticsSummary } from "../types";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
 import { WorkflowRunModal } from "../components/WorkflowRunModal";
 import { 
   getApplicationRisk, 
-  getApplicationAgeHours 
+  getApplicationAgeHours
 } from "../utils/formatters";
 import { 
   AlertTriangle, 
   CheckCircle2, 
   Clock, 
-  Layers, 
   Play, 
-  ArrowUpRight, 
-  UserCheck, 
-  ChevronRight,
-  TrendingUp,
-  ShieldAlert,
-  ArrowRight
+  ArrowUpRight,
+  InboxIcon,
+  ChevronRight
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -55,8 +50,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
-
-    // Listen to global workflow run events
     const handleWorkflowRun = () => loadData();
     window.addEventListener('workflow-run-completed', handleWorkflowRun);
     return () => window.removeEventListener('workflow-run-completed', handleWorkflowRun);
@@ -65,45 +58,33 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-36 w-full rounded-2xl" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => (
             <Skeleton key={i} className="h-28 w-full rounded-2xl" />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Skeleton className="h-96 lg:col-span-2 rounded-2xl" />
-          <Skeleton className="h-96 rounded-2xl" />
-        </div>
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     );
   }
 
-  // Segment applications by risk and stage
   const openTasks = tasks.filter(t => t.status === "OPEN");
   const escalationTasks = openTasks.filter(t => t.task_type === "ESCALATION");
   const followUpTasks = openTasks.filter(t => t.task_type === "FOLLOW_UP");
   const assignmentTasks = openTasks.filter(t => t.task_type === "ASSIGNMENT");
 
-  // Filter urgent applications needing attention right now
-  const urgentApplications = applications
+  const unclaimedApps = applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id);
+  const inProgressApps = applications.filter(a => a.status === "CLAIMED");
+  const completedApps = applications.filter(a => a.status === "COMPLETED");
+
+  const urgentApps = applications
     .filter(app => app.status !== "COMPLETED")
-    .map(app => ({
-      app,
-      risk: getApplicationRisk(app),
-      ageHours: getApplicationAgeHours(app.created_at)
-    }))
+    .map(app => ({ app, risk: getApplicationRisk(app) }))
     .filter(item => item.risk.level === "escalated" || item.risk.level === "at_risk" || item.risk.level === "attention")
     .sort((a, b) => {
-      // Prioritize escalated > at_risk > attention
       const order = { escalated: 3, at_risk: 2, attention: 1, normal: 0, completed: -1 };
       return order[b.risk.level] - order[a.risk.level];
     });
-
-  // Pipeline stage breakdown
-  const unclaimedApps = applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id);
-  const inReviewApps = applications.filter(a => a.status === "CLAIMED");
-  const completedApps = applications.filter(a => a.status === "COMPLETED");
 
   const processingHours = summary ? Number(summary.avg_processing_time_hours.toFixed(1)) : 0;
   const waitingHours = summary ? Number(summary.avg_waiting_time_hours.toFixed(1)) : 0;
@@ -112,298 +93,201 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Top Operational Command Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-slate-800">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-              Live Pipeline Pulse
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              {urgentApplications.length > 0 ? (
-                <span>
-                  <span className="text-rose-400">{urgentApplications.length} cases</span> require operational intervention
-                </span>
-              ) : (
-                "All pipeline cases are within SLA thresholds"
-              )}
-            </h2>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Monitoring <strong>{applications.length} total applications</strong> across Underwriting and Operations. 
-              {escalationTasks.length > 0 && (
-                <span className="text-rose-300 font-medium"> {escalationTasks.length} critical manager escalations active.</span>
-              )}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => setIsRunModalOpen(true)}
-              className="bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/25 border border-indigo-400/30"
-              icon={<Play className="w-4 h-4 fill-current" />}
-            >
-              Run Orchestration Engine
-            </Button>
-            <Link to="/tasks">
-              <Button variant="outline" size="lg" className="bg-slate-900/60 border-slate-700 text-black hover:bg-slate-800 hover:text-white">
-                View Task Queue ({openTasks.length})
-              </Button>
-            </Link>
-          </div>
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Overview</h2>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Tracking {applications.length} applications across your operations team.
+          </p>
         </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => setIsRunModalOpen(true)}
+          icon={<Play className="w-4 h-4 fill-current" />}
+        >
+          Run Engine
+        </Button>
+      </div>
 
-        {/* Pipeline Stage Funnel Strip */}
-        <div className="relative z-10 mt-8 pt-6 border-t border-slate-800/80 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-            <div className="text-xs text-slate-400 font-medium flex items-center justify-between">
-              <span>1. Unclaimed Intake</span>
-              <Layers className="w-3.5 h-3.5 text-slate-500" />
-            </div>
-            <div className="text-2xl font-bold text-white mt-1">{unclaimedApps.length}</div>
-            <div className="text-[11px] text-amber-400 mt-0.5">
-              {unclaimedApps.filter(a => getApplicationAgeHours(a.created_at) > 24).length} aging &gt; 24h
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-            <div className="text-xs text-slate-400 font-medium flex items-center justify-between">
-              <span>2. Active Review</span>
-              <UserCheck className="w-3.5 h-3.5 text-slate-500" />
-            </div>
-            <div className="text-2xl font-bold text-white mt-1">{inReviewApps.length}</div>
-            <div className="text-[11px] text-indigo-300 mt-0.5">Claimed by Underwriters</div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-            <div className="text-xs text-slate-400 font-medium flex items-center justify-between">
-              <span>3. At-Risk / Escalated</span>
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-            </div>
-            <div className="text-2xl font-bold text-rose-400 mt-1">{urgentApplications.length}</div>
-            <div className="text-[11px] text-rose-300 mt-0.5">{escalationTasks.length} manager alerts</div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-            <div className="text-xs text-slate-400 font-medium flex items-center justify-between">
-              <span>4. Successfully Completed</span>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            </div>
-            <div className="text-2xl font-bold text-emerald-400 mt-1">{completedApps.length}</div>
-            <div className="text-[11px] text-emerald-300/80 mt-0.5">
-              {applications.length > 0 ? Math.round((completedApps.length / applications.length) * 100) : 0}% completion rate
-            </div>
+      {/* 4 Stat Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">New / Unclaimed</div>
+          <div className="text-3xl font-bold text-amber-600">{unclaimedApps.length}</div>
+          <div className="text-xs text-slate-500">Waiting to be assigned</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">In Progress</div>
+          <div className="text-3xl font-bold text-indigo-600">{inProgressApps.length}</div>
+          <div className="text-xs text-slate-500">Being actively worked on</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Overdue</div>
+          <div className="text-3xl font-bold text-rose-600">{urgentApps.length}</div>
+          <div className="text-xs text-slate-500">{escalationTasks.length} manager alerts active</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed</div>
+          <div className="text-3xl font-bold text-emerald-600">{completedApps.length}</div>
+          <div className="text-xs text-slate-500">
+            {applications.length > 0 ? Math.round((completedApps.length / applications.length) * 100) : 0}% completion rate
           </div>
         </div>
       </div>
 
-      {/* Primary Grid: Urgent Attention Cases + Task Workload */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Urgent Attention Case Radar (2 cols) */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
+      {/* Main Two-Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Left: Overdue / Urgent Cases */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
             <div>
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-rose-600" />
-                Urgent Attention Radar
+              <h3 className="text-sm font-bold text-slate-900">
+                {urgentApps.length > 0 ? (
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-500" />
+                    {urgentApps.length} cases need attention
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    All cases are on track
+                  </span>
+                )}
               </h3>
-              <p className="text-xs text-slate-500">Cases requiring prompt action to prevent or resolve workflow SLA breaches</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Cases that have exceeded their SLA time limits
+              </p>
             </div>
             <Link to="/applications" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-              View All Cases <ChevronRight className="w-3.5 h-3.5" />
+              View all <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          {urgentApplications.length === 0 ? (
-            <Card className="p-8 text-center bg-white border-dashed">
-              <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-900">No Critical Bottlenecks</h4>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                All active applications are moving smoothly through the pipeline without overdue escalation triggers.
-              </p>
-            </Card>
+          {urgentApps.length === 0 ? (
+            <div className="py-16 text-center space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+              <p className="text-sm font-medium text-slate-700">No overdue cases right now</p>
+              <p className="text-xs text-slate-400">All active applications are within time limits.</p>
+            </div>
           ) : (
-            <div className="space-y-3">
-              {urgentApplications.slice(0, 5).map(({ app, risk, ageHours }) => (
-                <div 
-                  key={app.id} 
-                  className={`p-4 rounded-2xl border transition-all duration-200 bg-white hover:shadow-md ${
-                    risk.level === 'escalated' 
-                      ? 'border-rose-300/80 bg-rose-50/20' 
-                      : risk.level === 'at_risk' 
-                      ? 'border-amber-300/80 bg-amber-50/20' 
-                      : 'border-slate-200/80'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-bold text-slate-900">
-                          {app.application_number}
-                        </span>
-                        <Badge variant={risk.badgeVariant} dot pulse={risk.level === 'escalated'}>
-                          {risk.label}
-                        </Badge>
-                        <span className="text-xs text-slate-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          Age: {ageHours} hrs
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 font-medium">
-                        {risk.reason}
-                      </p>
-                      <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                        <span>Current Stage: <strong className="text-slate-700">{app.current_role || 'Unassigned'}</strong></span>
-                        <span>•</span>
-                        <span>Assignee: <strong className="text-slate-700">{app.claimed_by?.name || 'Unclaimed'}</strong></span>
-                      </div>
+            <div className="divide-y divide-slate-100">
+              {urgentApps.slice(0, 5).map(({ app, risk }) => (
+                <div key={app.id} className={`px-5 py-4 flex items-center justify-between gap-4 ${risk.level === 'escalated' ? 'bg-rose-50/40' : ''}`}>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm font-bold text-slate-900">{app.application_number}</span>
+                      <Badge variant={risk.badgeVariant} dot pulse={risk.level === 'escalated'}>
+                        {risk.label}
+                      </Badge>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Link to={`/applications/${app.id}`}>
-                        <Button variant="outline" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />}>
-                          Open Case
-                        </Button>
-                      </Link>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {getApplicationAgeHours(app.created_at)}h old
+                      </span>
+                      <span>•</span>
+                      <span>{app.claimed_by?.name || 'Unassigned'}</span>
                     </div>
                   </div>
+                  <Link to={`/applications/${app.id}`}>
+                    <Button variant="outline" size="xs" icon={<ArrowUpRight className="w-3.5 h-3.5" />}>
+                      Open
+                    </Button>
+                  </Link>
                 </div>
               ))}
             </div>
           )}
-
-          {/* Quick SLA Rule Logic Summary Card */}
-          <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-start gap-3 text-xs text-indigo-900">
-            <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl shrink-0 mt-0.5">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <div>
-              <h5 className="font-bold text-indigo-950">Orchestration Automation Policies</h5>
-              <p className="text-indigo-800/80 mt-0.5 leading-relaxed">
-                Rules engine scans applications automatically: unclaimed cases &gt; 24h alert Admins; claimed reviews &gt; 24h dispatch Follow-Ups; cases &gt; 48h escalate to Department Managers.
-              </p>
-            </div>
-          </div>
         </div>
 
-        {/* Right Column: Process Bottleneck & Task Breakdown */}
-        <div className="space-y-6">
-          {/* Bottleneck Spotlight Card */}
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle className="text-sm">Workflow Bottleneck Analysis</CardTitle>
-                <CardDescription>Human work time vs. queue waiting time</CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Critical Bottleneck Stage</div>
-                <div className="flex items-center justify-between">
-                  <div className="text-xl font-bold text-rose-600">
-                    {summary?.bottleneck_stage || "Underwriting"}
-                  </div>
-                  <Badge variant="error">Highest Lag</Badge>
+        {/* Right: Task Summary + Time Split */}
+        <div className="space-y-4">
+          {/* Task Queue Summary */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">Task Queue</h3>
+              <Link to="/tasks" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                View all <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="p-4 space-y-2">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100">
+                <div>
+                  <div className="text-xs font-bold text-rose-900">Manager Escalations</div>
+                  <div className="text-[11px] text-rose-600">Needs immediate action</div>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Applications experience the longest idle waiting time before or during this stage.
+                <span className="text-lg font-bold text-rose-700">{escalationTasks.length}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-100">
+                <div>
+                  <div className="text-xs font-bold text-amber-900">Follow-Ups</div>
+                  <div className="text-[11px] text-amber-600">SLA exceeded by officer</div>
+                </div>
+                <span className="text-lg font-bold text-amber-700">{followUpTasks.length}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50 border border-blue-100">
+                <div>
+                  <div className="text-xs font-bold text-blue-900">Assignments</div>
+                  <div className="text-[11px] text-blue-600">Cases waiting to be claimed</div>
+                </div>
+                <span className="text-lg font-bold text-blue-700">{assignmentTasks.length}</span>
+              </div>
+              {openTasks.length === 0 && (
+                <div className="flex items-center gap-2 text-xs text-slate-500 py-2 justify-center">
+                  <InboxIcon className="w-4 h-4" />
+                  No pending tasks
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Time Split Card */}
+          {summary && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Where is the time going?</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Average per application
                 </p>
               </div>
-
-              {/* Waiting vs Processing Ratio */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 font-medium">Pipeline Time Distribution</span>
-                  <span className="font-bold text-amber-700">{waitingPercent}% Waiting Time</span>
-                </div>
-                {/* Visual Ratio Bar */}
                 <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden flex">
-                  <div 
-                    style={{ width: `${100 - waitingPercent}%` }} 
-                    className="bg-indigo-600 h-full transition-all"
-                    title={`Active Processing: ${processingHours}h`}
+                  <div
+                    style={{ width: `${100 - waitingPercent}%` }}
+                    className="bg-indigo-500 h-full"
+                    title={`Active work: ${processingHours}h`}
                   />
-                  <div 
-                    style={{ width: `${waitingPercent}%` }} 
-                    className="bg-amber-500 h-full transition-all"
-                    title={`Waiting Time: ${waitingHours}h`}
+                  <div
+                    style={{ width: `${waitingPercent}%` }}
+                    className="bg-amber-400 h-full"
+                    title={`Waiting: ${waitingHours}h`}
                   />
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                    Active Processing ({processingHours}h)
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+                    Work ({processingHours}h)
                   </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    Waiting Idle ({waitingHours}h)
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                    Waiting ({waitingHours}h — {waitingPercent}%)
                   </span>
                 </div>
               </div>
-
-              <Link to="/analytics" className="block pt-2">
-                <Button variant="ghost" size="sm" className="w-full text-indigo-600 justify-between">
-                  <span>Explore Process Intelligence</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
+              <p className="text-xs text-slate-500 border-t border-slate-100 pt-3">
+                Bottleneck stage: <strong className="text-slate-800">{summary.bottleneck_stage}</strong>
+              </p>
+              <Link to="/analytics" className="block text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                See full analytics →
               </Link>
-            </CardContent>
-          </Card>
-
-          {/* Operational Task Breakdown Card */}
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle className="text-sm">Actionable Task Queues</CardTitle>
-                <CardDescription>{openTasks.length} pending items requiring action</CardDescription>
-              </div>
-              <Link to="/tasks">
-                <span className="text-xs font-semibold text-indigo-600 hover:underline">View</span>
-              </Link>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-rose-50/70 border border-rose-200/70">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
-                  <div>
-                    <div className="text-xs font-bold text-rose-900">Escalation Tasks</div>
-                    <div className="text-[11px] text-rose-700">Immediate manager intervention</div>
-                  </div>
-                </div>
-                <span className="text-base font-bold text-rose-700">{escalationTasks.length}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50/70 border border-amber-200/70">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                  <div>
-                    <div className="text-xs font-bold text-amber-900">Follow-Up Tasks</div>
-                    <div className="text-[11px] text-amber-700">Review time exceeds SLA</div>
-                  </div>
-                </div>
-                <span className="text-base font-bold text-amber-700">{followUpTasks.length}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50/70 border border-blue-200/70">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                  <div>
-                    <div className="text-xs font-bold text-blue-900">Assignment Tasks</div>
-                    <div className="text-[11px] text-blue-700">Unclaimed applications</div>
-                  </div>
-                </div>
-                <span className="text-base font-bold text-blue-700">{assignmentTasks.length}</span>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Workflow Run Modal */}
       <WorkflowRunModal
         isOpen={isRunModalOpen}
         onClose={() => setIsRunModalOpen(false)}
