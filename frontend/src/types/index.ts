@@ -1,7 +1,9 @@
+export type UserRole = "Admin" | "Manager" | "Claimed Officer";
+
 export interface User {
     id: number;
     name: string;
-    role: string;
+    role: UserRole | string;
     manager_user_id?: number;
 }
 
@@ -53,4 +55,17 @@ export interface AnalyticsSummary {
     avg_waiting_time_hours: number;
     total_escalations: number;
     bottleneck_stage: string;
+}
+
+export interface WorkflowRunResponse {
+    applications_checked: number;
+    tasks_created: number;
+    tasks_already_existing: number;
+    escalations_created: number;
+}
+
+export interface SimulationResponse {
+    cases_created: number;
+    application_numbers: string[];
+    workflow_stats: WorkflowRunResponse;
 }

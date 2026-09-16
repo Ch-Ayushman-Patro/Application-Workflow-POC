@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { 
-  getApplication, 
-  getTimeline, 
-  claimApplication, 
-  completeApplication, 
-  getUsers,
-  completeTask
-} from "../services/api";
-import type { Application, ApplicationEvent, User, Task } from "../types";
+  useApplication, 
+  useTimeline, 
+  useUsers, 
+  useClaimApplication, 
+  useCompleteApplication, 
+  useCompleteTask 
+} from "../hooks/useWorkflowQueries";
+import type { Task } from "../types";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -18,7 +18,8 @@ import {
   getApplicationRisk, 
   getApplicationAgeHours, 
   formatDate, 
-  formatRelativeTime 
+  formatRelativeTime,
+  formatHoursToDaysAndHours
 } from "../utils/formatters";
 import { 
   ArrowLeft, 
@@ -30,90 +31,61 @@ import {
   Check,
   Calendar
 } from "lucide-react";
+import { useRole } from "../context/RoleContext";
 
 export default function ApplicationDetail() {
+  const { currentUser, currentRole } = useRole();
   const { id } = useParams<{ id: string }>();
   const appId = Number(id);
 
-  const [application, setApplication] = useState<Application | null>(null);
-  const [timeline, setTimeline] = useState<ApplicationEvent[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Cached server-state queries
+  const { data: application, isLoading: loadingApp } = useApplication(appId);
+  const { data: timeline = [] } = useTimeline(appId);
+  const { data: users = [], isLoading: loadingUsers } = useUsers();
+
+  // Targeted mutations
+  const claimMutation = useClaimApplication();
+  const completeAppMutation = useCompleteApplication();
+  const completeTaskMutation = useCompleteTask();
 
   // Claim modal state
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | "">("");
-  const [actionLoading, setActionLoading] = useState(false);
 
   // Task resolution modal
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
 
-  const loadData = async () => {
-    if (!appId) return;
-    try {
-      const [appData, timelineData, usersData] = await Promise.all([
-        getApplication(appId),
-        getTimeline(appId),
-        getUsers()
-      ]);
-      setApplication(appData);
-      setTimeline(timelineData);
-      setUsers(usersData);
-    } catch (err) {
-      console.error("Failed to load application details", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-
-    const handleWorkflowRun = () => loadData();
-    window.addEventListener('workflow-run-completed', handleWorkflowRun);
-    return () => window.removeEventListener('workflow-run-completed', handleWorkflowRun);
-  }, [appId]);
+  const actionLoading = claimMutation.isPending || completeAppMutation.isPending || completeTaskMutation.isPending;
+  const loading = (loadingApp && !application) || (loadingUsers && users.length === 0);
 
   const handleClaim = async () => {
     if (!selectedUserId) return;
-    setActionLoading(true);
     try {
-      await claimApplication(appId, Number(selectedUserId));
+      await claimMutation.mutateAsync({ id: appId, userId: Number(selectedUserId) });
       setIsClaimModalOpen(false);
       setSelectedUserId("");
-      await loadData();
     } catch (err) {
       console.error(err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
   const handleCompleteApp = async () => {
-    setActionLoading(true);
     try {
-      await completeApplication(appId);
-      await loadData();
+      await completeAppMutation.mutateAsync(appId);
     } catch (err) {
       console.error(err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
   const handleResolveTask = async () => {
     if (!resolvingTask) return;
-    setActionLoading(true);
     try {
-      await completeTask(resolvingTask.id);
+      await completeTaskMutation.mutateAsync(resolvingTask.id);
       setResolvingTask(null);
       setResolutionNotes("");
-      await loadData();
     } catch (err) {
       console.error(err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -148,7 +120,7 @@ export default function ApplicationDetail() {
       desc: "Application received and queued"
     },
     {
-      label: "2. Underwriting Assignment",
+      label: "2. Officer Assignment",
       status: isClaimed ? ("completed" as const) : ("current" as const),
       timestamp: application.claimed_at ? formatDate(application.claimed_at) : "Awaiting assignment",
       desc: application.claimed_by ? `Claimed by ${application.claimed_by.name}` : "Unclaimed in pool"
@@ -207,7 +179,7 @@ export default function ApplicationDetail() {
               <span>•</span>
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
-                Pipeline Aging: <strong className="text-slate-700">{ageHours} hours</strong>
+                Pipeline Aging: <strong className="text-slate-700">{formatHoursToDaysAndHours(ageHours)}</strong>
               </span>
             </p>
           </div>
@@ -219,12 +191,19 @@ export default function ApplicationDetail() {
                 variant="primary"
                 size="md"
                 onClick={() => {
-                  if (users.length > 0) setSelectedUserId(users[0].id);
+                  const claimable = users.filter((u) => u.role === "Claimed Officer");
+                  if (currentRole === "Claimed Officer") {
+                    setSelectedUserId(currentUser.id);
+                  } else if (claimable.length > 0) {
+                    setSelectedUserId(claimable[0].id);
+                  } else if (users.length > 0) {
+                    setSelectedUserId(users[0].id);
+                  }
                   setIsClaimModalOpen(true);
                 }}
                 icon={<UserCheck className="w-4 h-4" />}
               >
-                Claim & Assign Case
+                {currentRole === "Claimed Officer" ? "Claim Case" : "Assign Case"}
               </Button>
             )}
 
@@ -453,12 +432,19 @@ export default function ApplicationDetail() {
                     size="xs"
                     variant="primary"
                     onClick={() => {
-                      if (users.length > 0) setSelectedUserId(users[0].id);
+                      const claimable = users.filter((u) => u.role === "Claimed Officer");
+                      if (currentRole === "Claimed Officer") {
+                        setSelectedUserId(currentUser.id);
+                      } else if (claimable.length > 0) {
+                        setSelectedUserId(claimable[0].id);
+                      } else if (users.length > 0) {
+                        setSelectedUserId(users[0].id);
+                      }
                       setIsClaimModalOpen(true);
                     }}
                     className="w-full"
                   >
-                    Assign Now
+                    {currentRole === "Claimed Officer" ? "Claim Case Now" : "Assign Now"}
                   </Button>
                 </div>
               )}
@@ -466,7 +452,7 @@ export default function ApplicationDetail() {
               <div className="pt-2 border-t border-slate-100 space-y-2 text-xs">
                 <div className="flex justify-between text-slate-500">
                   <span>Current Workflow Role</span>
-                  <span className="font-semibold text-slate-800">{application.current_role || "Underwriting"}</span>
+                  <span className="font-semibold text-slate-800">{application.current_role || "Claimed Officer"}</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Current Stage</span>
@@ -515,7 +501,7 @@ export default function ApplicationDetail() {
                     <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-slate-700">Overall Elapsed Time</span>
-                        <span className="font-mono font-bold text-slate-900">{totalCalcHours} Hours</span>
+                        <span className="font-mono font-bold text-slate-900">{formatHoursToDaysAndHours(totalCalcHours)}</span>
                       </div>
 
                       {/* Visual Ratio Bar */}
@@ -523,21 +509,21 @@ export default function ApplicationDetail() {
                         <div 
                           style={{ width: `${humanPct}%` }}
                           className="bg-indigo-600 h-full transition-all"
-                          title={`Time spent by human: ${humanHours}h (${humanPct}%)`}
+                          title={`Time spent by human: ${formatHoursToDaysAndHours(humanHours)} (${humanPct}%)`}
                         />
                         <div 
                           style={{ width: `${waitPct}%` }}
                           className="bg-amber-500 h-full transition-all"
-                          title={`Wait time between tasks: ${waitHours}h (${waitPct}%)`}
+                          title={`Wait time between tasks: ${formatHoursToDaysAndHours(waitHours)} (${waitPct}%)`}
                         />
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] pt-1">
                         <span className="text-indigo-700 font-medium">
-                          Human Work: <strong>{humanHours}h</strong> ({humanPct}%)
+                          Human Work: <strong>{formatHoursToDaysAndHours(humanHours)}</strong> ({humanPct}%)
                         </span>
                         <span className="text-amber-800 font-medium">
-                          Wait Time: <strong>{waitHours}h</strong> ({waitPct}%)
+                          Wait Time: <strong>{formatHoursToDaysAndHours(waitHours)}</strong> ({waitPct}%)
                         </span>
                       </div>
                     </div>
@@ -580,8 +566,8 @@ export default function ApplicationDetail() {
       <Modal
         isOpen={isClaimModalOpen}
         onClose={() => setIsClaimModalOpen(false)}
-        title="Assign Case to Underwriter"
-        description={`Assign application ${application.application_number} to begin review.`}
+        title="Assign Case to Claimed Officer"
+        description={`Assign application ${application.application_number} to a Claimed Officer to begin review.`}
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setIsClaimModalOpen(false)}>
@@ -601,14 +587,17 @@ export default function ApplicationDetail() {
         <div className="space-y-4 py-2">
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-              Select Operator
+              Select Claimed Officer
             </label>
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
             >
-              {users.map((u) => (
+              {(users.filter((u) => u.role === "Claimed Officer").length > 0
+                ? users.filter((u) => u.role === "Claimed Officer")
+                : users
+              ).map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name} — {u.role}
                 </option>

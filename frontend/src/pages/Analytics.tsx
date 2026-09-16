@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
-import { getAnalyticsSummary } from "../services/api";
-import type { AnalyticsSummary } from "../types";
+import { Link } from "react-router-dom";
 import { 
   BarChart, 
   Bar, 
@@ -12,63 +10,105 @@ import {
   Cell 
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/Card";
-import { Skeleton } from "../components/ui/Skeleton";
 import { Badge } from "../components/ui/Badge";
+import { Skeleton } from "../components/ui/Skeleton";
+import { Button } from "../components/ui/Button";
 import { 
   Clock, 
   ShieldAlert, 
+  ArrowLeft, 
+  UserCheck, 
+  AlertTriangle, 
+  ArrowUpRight, 
+  Activity, 
+  Inbox,
   Flame
 } from "lucide-react";
+import { formatHoursToDaysAndHours, formatApplicationAge, getApplicationRisk } from "../utils/formatters";
+import { useRole } from "../context/RoleContext";
+import { useAnalyticsSummary, useApplications, useTasks } from "../hooks/useWorkflowQueries";
 
 export default function Analytics() {
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { currentRole, switchRoleUser, allUsers } = useRole();
+  const isAdmin = currentRole === "Admin";
 
-  useEffect(() => {
-    getAnalyticsSummary()
-      .then((data) => setSummary(data))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+  // STRICT ARCHITECTURAL RULE: Do NOT trigger analytics API request when currentRole is not Admin
+  const { data: summary, isLoading: loadingSummary } = useAnalyticsSummary({ enabled: isAdmin });
+  const { data: applications = [], isLoading: loadingApps } = useApplications();
+  const { data: tasks = [], isLoading: loadingTasks } = useTasks();
 
-    const handleWorkflowRun = () => {
-      getAnalyticsSummary().then(setSummary).catch(console.error);
-    };
-    window.addEventListener('workflow-run-completed', handleWorkflowRun);
-    return () => window.removeEventListener('workflow-run-completed', handleWorkflowRun);
-  }, []);
+  // If user is not Admin, display Access Restricted view and do NOT fetch analytics data
+  if (!isAdmin) {
+    const adminUser = allUsers.find((u) => u.role === "Admin");
 
-  if (loading || !summary) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-44 w-full rounded-3xl" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Skeleton className="h-80 w-full rounded-2xl" />
-          <Skeleton className="h-80 w-full rounded-2xl" />
+      <div className="py-16 text-center max-w-lg mx-auto space-y-5">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Access Restricted</h2>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            Process Intelligence, pipeline velocity metrics, and delay diagnostics are reserved exclusively for the <strong>Admin</strong> supervisory role.
+          </p>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-800 text-left">
+            <span className="font-semibold block mb-0.5">Demo Role Simulation Note:</span>
+            This role restriction demonstrates role-tailored operational views. It is <strong>not</strong> an authentication or authorization security boundary.
+          </div>
+        </div>
+
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link to="/">
+            <Button variant="outline" size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />}>
+              Return to Command Center
+            </Button>
+          </Link>
+          {adminUser && (
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={() => switchRoleUser(adminUser.id)}
+              icon={<UserCheck className="w-3.5 h-3.5" />}
+            >
+              Simulate as {adminUser.name} (Admin)
+            </Button>
+          )}
         </div>
       </div>
     );
   }
 
+  const isLoading = (loadingSummary && !summary) || (loadingApps && applications.length === 0) || (loadingTasks && tasks.length === 0);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+        </div>
+        <Skeleton className="h-44 w-full rounded-2xl" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 rounded-2xl" />)}
+        </div>
+        <Skeleton className="h-72 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="py-16 text-center text-slate-500 text-sm">
+        No analytics data available.
+      </div>
+    );
+  }
+
+  // ── 1. Pipeline Metrics ──────────────────────────────────────────────────
   const processingHours = Number(summary.avg_processing_time_hours.toFixed(1));
   const waitingHours = Number(summary.avg_waiting_time_hours.toFixed(1));
   const totalHours = processingHours + waitingHours;
   const waitingPercentage = totalHours > 0 ? Math.round((waitingHours / totalHours) * 100) : 0;
   const processingPercentage = 100 - waitingPercentage;
-
-  const comparisonData = [
-    {
-      name: "Active Human Work",
-      hours: processingHours,
-      color: "#4f46e5", // indigo-600
-      description: "Direct underwriter & operator touch time"
-    },
-    {
-      name: "Queue Waiting Time",
-      hours: waitingHours,
-      color: "#f59e0b", // amber-500
-      description: "Idle time waiting for assignment or review"
-    }
-  ];
 
   const completionRate = summary.total_applications > 0
     ? Math.round((summary.completed_applications / summary.total_applications) * 100)
@@ -78,95 +118,355 @@ export default function Analytics() {
     ? Math.round((summary.total_escalations / summary.total_applications) * 100)
     : 0;
 
+  // ── 2. Where Cases Are Stuck (Stage Breakdown) ───────────────────────────
+  const openUnclaimed = applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id);
+  const claimedUnderReview = applications.filter(a => a.status === "CLAIMED");
+  const openTasks = tasks.filter(t => t.status === "OPEN");
+  const escalationTasks = openTasks.filter(t => t.task_type === "ESCALATION");
+  const followUpTasks = openTasks.filter(t => t.task_type === "FOLLOW_UP");
+  const assignmentTasks = openTasks.filter(t => t.task_type === "ASSIGNMENT");
+
+  // Escalated cases (unique application IDs)
+  const escalatedAppIds = new Set(escalationTasks.map(t => t.application_id));
+  const escalatedApps = applications.filter(a => escalatedAppIds.has(a.id));
+
+  // ── 3. Why Are They Delayed (SLA Breach Rules) ───────────────────────────
+  // Business SLA rules:
+  // - Intake > 24h unassigned -> ASSIGNMENT task created
+  // - Review > 24h claimed -> FOLLOW_UP task created
+  // - Review > 48h claimed -> ESCALATION task created
+  const slaBreachDetails = [
+    {
+      rule: "Intake > 24h (Unassigned)",
+      count: assignmentTasks.length,
+      impact: "Applications sitting without an assigned Claimed Officer.",
+      severity: assignmentTasks.length > 0 ? "amber" : "neutral",
+      action: "Assign to Claimed Officer"
+    },
+    {
+      rule: "Review > 24h (Officer Delay)",
+      count: followUpTasks.length,
+      impact: "Claimed review has stalled past the initial 24-hour SLA window.",
+      severity: followUpTasks.length > 0 ? "amber" : "neutral",
+      action: "Prompt officer follow-up"
+    },
+    {
+      rule: "Review > 48h (Manager Escalation)",
+      count: escalationTasks.length,
+      impact: "Critical delay. Breached 48-hour SLA threshold requiring manager intervention.",
+      severity: escalationTasks.length > 0 ? "rose" : "neutral",
+      action: "Manager intervention required"
+    }
+  ];
+
+  // ── 4. What Needs Attention (Actionable Cases) ───────────────────────────
+  const atRiskApps = applications
+    .filter(a => a.status !== "COMPLETED")
+    .map(app => ({ app, risk: getApplicationRisk(app) }))
+    .filter(item => item.risk.level === "escalated" || item.risk.level === "at_risk" || item.risk.level === "attention")
+    .sort((a, b) => {
+      const order = { escalated: 3, at_risk: 2, attention: 1, normal: 0, completed: -1 };
+      return order[b.risk.level] - order[a.risk.level];
+    });
+
+  // ── 5. Bottleneck Analysis ───────────────────────────────────────────────
+  const bottleneckDescription = summary.bottleneck_stage === "Unassigned"
+    ? "Applications are spending the longest accumulated time in the unassigned intake queue waiting for an officer to claim them."
+    : summary.bottleneck_stage === "Claimed Officer Review"
+    ? "Applications are spending the longest accumulated time under review by claimed officers after being assigned."
+    : `The highest accumulated delay is currently concentrated in the ${summary.bottleneck_stage} stage.`;
+
+  const bottleneckCases = summary.bottleneck_stage === "Unassigned"
+    ? openUnclaimed
+    : claimedUnderReview;
+
+  const chartData = [
+    {
+      name: "Human Review",
+      hours: processingHours,
+      color: "#4f46e5",
+    },
+    {
+      name: "Queue Waiting",
+      hours: waitingHours,
+      color: "#f59e0b",
+    }
+  ];
+
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Process Intelligence</h2>
-        <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-          Diagnose pipeline friction, identify queue bottlenecks, and compare human work vs idle wait time.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Process Intelligence</h2>
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+              Admin Supervisory
+            </span>
+          </div>
+          <p className="text-sm text-slate-500 mt-1 max-w-2xl">
+            Diagnose pipeline throughput, identify queue bottlenecks, and investigate why loan applications are breaching SLAs.
+          </p>
+        </div>
+        <Link to="/applications">
+          <Button variant="outline" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />}>
+            View All Applications
+          </Button>
+        </Link>
       </div>
 
-      {/* Hero Storytelling Banner: The Pipeline Bottleneck Spotlight */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 sm:p-8 text-white border border-slate-800 shadow-xl">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-3 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold">
-              <Flame className="w-3.5 h-3.5 text-rose-400" />
-              Primary Pipeline Bottleneck
+      {/* SECTION 1: Overall Pipeline Health */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+          1. Overall Pipeline Health
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Volume</div>
+            <div className="text-3xl font-bold text-slate-900">{summary.total_applications}</div>
+            <div className="text-xs text-slate-500">Applications in system</div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completion Rate</div>
+            <div className="text-3xl font-bold text-emerald-600">{completionRate}%</div>
+            <div className="text-xs text-slate-500">{summary.completed_applications} of {summary.total_applications} finalized</div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Escalation Rate</div>
+            <div className="text-3xl font-bold text-rose-600">{escalationRate}%</div>
+            <div className="text-xs text-slate-500">{summary.total_escalations} manager escalations</div>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Backlog</div>
+            <div className="text-3xl font-bold text-indigo-600">{summary.open_applications + summary.claimed_applications}</div>
+            <div className="text-xs text-slate-500">{summary.pending_action} tasks awaiting action</div>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 2: Where Cases Are Stuck */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+          2. Where Are Cases Getting Stuck?
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Intake Queue */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <Inbox className="w-3.5 h-3.5 text-amber-500" />
+                  Intake Queue
+                </span>
+                <Badge variant={openUnclaimed.length > 0 ? "warning" : "default"} size="sm">
+                  {openUnclaimed.length} Unassigned
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Submitted applications awaiting Claimed Officer assignment. Over 24h triggers an Admin assignment task.
+              </p>
             </div>
-            <h3 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Applications spend <span className="text-amber-400">{waitingPercentage}% of their lifecycle</span> waiting idle
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              The primary workflow friction point is centered in <strong className="text-white font-semibold">{summary.bottleneck_stage}</strong>. 
-              While active processing requires an average of {processingHours} hours, cases remain waiting in queue for {waitingHours} hours before assignment and review completion.
-            </p>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Requires:</span>
+              <span className="font-semibold text-slate-800">Officer Assignment</span>
+            </div>
           </div>
 
-          {/* Quick Metrics Badge Card */}
-          <div className="shrink-0 p-5 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 space-y-3 min-w-[220px]">
+          {/* Under Review */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
             <div>
-              <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Critical Stage</div>
-              <div className="text-xl font-bold text-rose-400">{summary.bottleneck_stage}</div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                  Claimed Officer Review
+                </span>
+                <Badge variant="info" size="sm">
+                  {claimedUnderReview.length} In Progress
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Cases currently claimed by officers. &gt;24h triggers officer follow-up; &gt;48h triggers manager escalation.
+              </p>
             </div>
-            <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-              <span className="text-xs text-slate-400">Total Escalations</span>
-              <span className="text-lg font-bold text-white">{summary.total_escalations}</span>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Requires:</span>
+              <span className="font-semibold text-slate-800">Officer Decision / Approval</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">Pending Actions</span>
-              <span className="text-lg font-bold text-amber-400">{summary.pending_action}</span>
+          </div>
+
+          {/* Escalations */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                  Manager Escalations
+                </span>
+                <Badge variant={escalatedApps.length > 0 ? "error" : "success"} size="sm">
+                  {escalatedApps.length} Escalated
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Applications where SLA exceeded 48 hours without completion. Direct manager oversight active.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Requires:</span>
+              <span className="font-semibold text-rose-700">Manager Intervention</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Visual Comparison: Processing Time vs Waiting Time */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recharts Bar Comparison */}
-        <Card className="flex flex-col">
+      {/* SECTION 3: Why Are Cases Delayed (SLA Breach Breakdown) */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+          3. Why Are They Delayed? (Workflow Rule Triggers)
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+          {slaBreachDetails.map((item, idx) => (
+            <div key={idx} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-slate-900">{item.rule}</span>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                    item.count > 0 && item.severity === "rose" 
+                      ? "bg-rose-100 text-rose-700 border border-rose-200"
+                      : item.count > 0 && item.severity === "amber"
+                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                      : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {item.count} Breach{item.count !== 1 ? "es" : ""}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">{item.impact}</p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs text-slate-400 font-medium hidden md:inline">Action: {item.action}</span>
+                <Link to="/tasks">
+                  <Button variant="outline" size="xs">
+                    View Tasks
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* SECTION 4: Primary Bottleneck & Actionable Delay Analysis */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+          4. Primary Bottleneck Diagnosis
+        </div>
+        <div className="bg-linear-to-br from-slate-950 to-indigo-950 text-white rounded-2xl p-6 shadow-sm border border-indigo-900/40 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                <Flame className="w-4 h-4" />
+                Highest Accumulated Delay
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold">
+                Stage Bottleneck: <span className="text-amber-300">{summary.bottleneck_stage}</span>
+              </h3>
+            </div>
+            <span className="text-xs bg-white/10 px-2.5 py-1 rounded-lg font-medium text-slate-200 shrink-0">
+              {bottleneckCases.length} Cases Affected
+            </span>
+          </div>
+          <p className="text-sm text-slate-300 max-w-3xl leading-relaxed">
+            {bottleneckDescription} This stage has accumulated the most idle waiting hours across the portfolio.
+          </p>
+
+          {/* Quick list of cases in the bottleneck stage */}
+          {bottleneckCases.length > 0 && (
+            <div className="pt-2 border-t border-white/10 space-y-2">
+              <div className="text-xs font-semibold text-slate-300">Cases currently delayed in this stage:</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {bottleneckCases.slice(0, 6).map(app => (
+                  <Link
+                    key={app.id}
+                    to={`/applications/${app.id}`}
+                    className="bg-white/5 hover:bg-white/10 transition-colors p-2.5 rounded-xl border border-white/10 flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <div className="font-mono font-bold text-indigo-300">{app.application_number}</div>
+                      <div className="text-[11px] text-slate-400">{formatApplicationAge(app.created_at)} old</div>
+                    </div>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SECTION 5: Time Analysis in Plain Language & Chart */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+          5. Active Work vs. Waiting Latency
+        </div>
+        <Card>
           <CardHeader>
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-indigo-600" />
-                Human Processing vs. Waiting Time (Hours)
+                Time Analysis Breakdown
               </CardTitle>
               <CardDescription>
-                Comparison of actual operator work duration versus idle queue latency
+                Comparison between active underwriting touch time and queue waiting latency.
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between pt-2">
+          <CardContent className="space-y-6">
+            {/* Plain language explanation */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed space-y-2">
+              <p>
+                Across an average application lifecycle of <strong>{formatHoursToDaysAndHours(totalHours)}</strong>:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                <li>
+                  <strong className="text-indigo-700">{formatHoursToDaysAndHours(processingHours)} ({processingPercentage}%)</strong> is spent in active human processing (reviewing documents, underwriting, decisioning).
+                </li>
+                <li>
+                  <strong className="text-amber-700">{formatHoursToDaysAndHours(waitingHours)} ({waitingPercentage}%)</strong> is spent idle in queues waiting for officer assignment or SLA escalation resolution.
+                </li>
+              </ul>
+              <p className="text-[11px] text-slate-500 pt-1">
+                Operational takeaway: Reducing queue idle time before assignment yields significantly faster turnaround than accelerating officer review speed.
+              </p>
+            </div>
+
+            {/* Bar Chart */}
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={comparisonData} margin={{ top: 20, right: 20, left: -10, bottom: 0 }}>
+                <BarChart data={chartData} margin={{ top: 20, right: 20, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: "#64748b", fontSize: 12, fontWeight: 500 }} 
-                    dy={10} 
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#64748b", fontSize: 12, fontWeight: 500 }}
+                    dy={10}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: "#64748b", fontSize: 12 }} 
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#64748b", fontSize: 12 }}
                   />
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: "#f1f5f9" }}
-                    formatter={(value) => [`${value} Hours`, "Duration"]}
-                    contentStyle={{ 
-                      borderRadius: "12px", 
-                      border: "1px solid #e2e8f0", 
+                    formatter={(value) => [formatHoursToDaysAndHours(Number(value)), "Duration"]}
+                    contentStyle={{
+                      borderRadius: "12px",
+                      border: "1px solid #e2e8f0",
                       boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                       fontSize: "12px"
                     }}
                   />
-                  <Bar dataKey="hours" radius={[8, 8, 0, 0]} maxBarSize={64}>
-                    {comparisonData.map((entry, index) => (
+                  <Bar dataKey="hours" radius={[8, 8, 0, 0]} maxBarSize={80}>
+                    {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Bar>
@@ -174,105 +474,64 @@ export default function Analytics() {
               </ResponsiveContainer>
             </div>
 
-            {/* Insight Callout */}
-            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+            {/* Legend & Summary */}
+            <div className="flex flex-wrap items-center justify-center gap-6 pt-4 border-t border-slate-100 text-xs text-slate-600">
               <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-indigo-600"></div>
-                <span>Active Touch: <strong>{processingHours}h</strong> ({processingPercentage}%)</span>
+                <span className="w-3 h-3 rounded-full bg-indigo-600 inline-block" />
+                <span>Active Touch Time: <strong>{formatHoursToDaysAndHours(processingHours)}</strong> ({processingPercentage}%)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
-                <span>Idle Waiting: <strong>{waitingHours}h</strong> ({waitingPercentage}%)</span>
+                <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
+                <span>Idle Waiting Latency: <strong>{formatHoursToDaysAndHours(waitingHours)}</strong> ({waitingPercentage}%)</span>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pipeline Stage Health & SLA Hotspots */}
-        <Card className="flex flex-col">
-          <CardHeader>
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-600" />
-                Pipeline Stages & SLA Latency Breakdown
-              </CardTitle>
-              <CardDescription>
-                Where delays accumulate across deterministic workflow stages
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 flex-1">
-            {/* Stage 1 */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">1</span>
-                  <span className="text-xs font-bold text-slate-900">Intake & Assignment Stage</span>
-                </div>
-                <Badge variant="warning" size="sm">24h SLA Threshold</Badge>
-              </div>
-              <p className="text-[11px] text-slate-500 pl-7">
-                Unclaimed applications generate automatic Admin tasks if stagnant for over 24 hours.
-              </p>
-            </div>
-
-            {/* Stage 2 */}
-            <div className="p-3.5 rounded-xl bg-rose-50/50 border border-rose-200/80 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-[10px] font-bold">2</span>
-                  <span className="text-xs font-bold text-rose-950">Underwriting Review (Active Bottleneck)</span>
-                </div>
-                <Badge variant="error" size="sm">Highest Latency</Badge>
-              </div>
-              <p className="text-[11px] text-rose-800/80 pl-7">
-                Reviews exceeding 24 hours trigger Follow-Up tasks; reviews exceeding 48 hours trigger direct Manager Escalations.
-              </p>
-            </div>
-
-            {/* Stage 3 */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-bold">3</span>
-                  <span className="text-xs font-bold text-slate-900">Decision & Workflow Completion</span>
-                </div>
-                <Badge variant="success" size="sm">Resolved</Badge>
-              </div>
-              <p className="text-[11px] text-slate-500 pl-7">
-                Full lifecycle audit history recorded upon case closure.
-              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Volume & Conversion Statistics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-5 space-y-1">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Volume</div>
-          <div className="text-2xl font-bold text-slate-900">{summary.total_applications}</div>
-          <div className="text-[11px] text-slate-500">Applications in system</div>
-        </Card>
-
-        <Card className="p-5 space-y-1">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completion Rate</div>
-          <div className="text-2xl font-bold text-emerald-600">{completionRate}%</div>
-          <div className="text-[11px] text-slate-500">{summary.completed_applications} of {summary.total_applications} completed</div>
-        </Card>
-
-        <Card className="p-5 space-y-1">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Escalation Ratio</div>
-          <div className="text-2xl font-bold text-rose-600">{escalationRate}%</div>
-          <div className="text-[11px] text-slate-500">{summary.total_escalations} total manager escalations</div>
-        </Card>
-
-        <Card className="p-5 space-y-1">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Backlog</div>
-          <div className="text-2xl font-bold text-indigo-600">{summary.open_applications + summary.claimed_applications}</div>
-          <div className="text-[11px] text-slate-500">{summary.pending_action} actionable tasks open</div>
-        </Card>
-      </div>
+      {/* SECTION 6: What Needs Immediate Attention */}
+      {atRiskApps.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              6. Actionable Applications Needing Attention ({atRiskApps.length})
+            </div>
+            <Link to="/applications" className="text-xs text-indigo-600 hover:underline font-medium">
+              View in pipeline →
+            </Link>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+            {atRiskApps.slice(0, 5).map(({ app, risk }) => (
+              <div key={app.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      to={`/applications/${app.id}`}
+                      className="font-mono text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+                    >
+                      {app.application_number}
+                      <ArrowUpRight className="w-3 h-3 text-slate-400" />
+                    </Link>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Stage: <span className="text-slate-700 font-medium">{app.current_stage || "Intake"}</span> · Owned by: <span className="text-slate-700 font-medium">{app.claimed_by?.name || "Unassigned"}</span> · {formatApplicationAge(app.created_at)} old
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant={risk.badgeVariant} size="sm">
+                    {risk.label}
+                  </Badge>
+                  <Link to={`/applications/${app.id}`}>
+                    <Button size="xs" variant="outline">
+                      Investigate
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

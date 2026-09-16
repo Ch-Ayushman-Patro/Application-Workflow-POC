@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { runWorkflow } from '../services/api';
+import { useRunWorkflow, useSimulateInflow } from '../hooks/useWorkflowQueries';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { 
@@ -10,8 +10,8 @@ import {
   Activity, 
   ShieldCheck, 
   ArrowRight,
-  RefreshCw,
-  Sparkles
+  Sparkles,
+  PlusCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -22,7 +22,7 @@ export interface WorkflowRunModalProps {
 }
 
 export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModalProps) {
-  const [running, setRunning] = useState(false);
+  const [simulatedCases, setSimulatedCases] = useState<string[]>([]);
   const [result, setResult] = useState<{
     applications_checked: number;
     tasks_created: number;
@@ -30,21 +30,35 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
     escalations_created: number;
   } | null>(null);
 
-  const handleExecute = async () => {
-    setRunning(true);
+  const runWorkflowMutation = useRunWorkflow();
+  const simulateInflowMutation = useSimulateInflow();
+  const running = runWorkflowMutation.isPending || simulateInflowMutation.isPending;
+
+  const handleExecuteOnly = async () => {
+    setSimulatedCases([]);
     try {
-      const data = await runWorkflow();
+      const data = await runWorkflowMutation.mutateAsync();
       setResult(data);
       if (onSuccess) onSuccess();
     } catch (err) {
       console.error(err);
-    } finally {
-      setRunning(false);
+    }
+  };
+
+  const handleSimulateAndRun = async () => {
+    try {
+      const response = await simulateInflowMutation.mutateAsync({ count: 3, runWorkflow: true });
+      setSimulatedCases(response.application_numbers || []);
+      setResult(response.workflow_stats);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const handleClose = () => {
     setResult(null);
+    setSimulatedCases([]);
     onClose();
   };
 
@@ -59,7 +73,7 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
           </div>
           <div>
             <h3 className="text-base font-semibold text-slate-900">Run Workflow Engine</h3>
-            <p className="text-xs text-slate-500 font-normal">Deterministic rules-based evaluation & task orchestration</p>
+            <p className="text-xs text-slate-500 font-normal">Evaluate SLA rules or simulate incoming applications</p>
           </div>
         </div>
       }
@@ -71,11 +85,17 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
               onClick={handleClose}
               className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
             >
-              Go to Task Queue <ArrowRight className="w-3.5 h-3.5" />
+              Go to Task Inbox <ArrowRight className="w-3.5 h-3.5" />
             </Link>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExecute} loading={running} icon={<RefreshCw className="w-3.5 h-3.5" />}>
-                Run Again
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleSimulateAndRun} 
+                loading={running} 
+                icon={<PlusCircle className="w-3.5 h-3.5 text-indigo-600" />}
+              >
+                Simulate More Cases
               </Button>
               <Button variant="primary" size="sm" onClick={handleClose}>
                 Done
@@ -83,19 +103,30 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-end gap-2.5">
+          <div className="flex items-center justify-between w-full">
             <Button variant="ghost" size="sm" onClick={handleClose} disabled={running}>
               Cancel
             </Button>
-            <Button 
-              variant="primary" 
-              size="sm" 
-              onClick={handleExecute} 
-              loading={running} 
-              icon={<Play className="w-3.5 h-3.5 fill-current" />}
-            >
-              Scan & Orchestrate Now
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExecuteOnly} 
+                loading={running} 
+                icon={<Play className="w-3.5 h-3.5" />}
+              >
+                Scan Current Cases Only
+              </Button>
+              <Button 
+                variant="primary" 
+                size="sm" 
+                onClick={handleSimulateAndRun} 
+                loading={running} 
+                icon={<Sparkles className="w-3.5 h-3.5" />}
+              >
+                Simulate Inflow & Run (Demo)
+              </Button>
+            </div>
           </div>
         )
       }
@@ -103,7 +134,7 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
       {!result ? (
         <div className="space-y-4 py-1">
           <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4">
-            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Automated Evaluation Rules</h4>
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Automated SLA Rules</h4>
             <div className="space-y-2 text-xs text-slate-600">
               <div className="flex items-start gap-2">
                 <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
@@ -126,20 +157,28 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
             </div>
           </div>
 
-          <p className="text-xs text-slate-500">
-            Clicking <strong>Scan & Orchestrate Now</strong> will inspect all active cases in the database, calculate age thresholds, dispatch new tasks, and record audit events.
-          </p>
+          <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-start gap-2.5">
+            <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+            <div>
+              <strong className="font-semibold text-indigo-950">Demo Inflow Simulation:</strong>
+              <p className="text-indigo-800/80 mt-0.5">
+                Click <strong>"Simulate Inflow & Run"</strong> to generate 3 new randomized applications with varying SLA ages (unclaimed, active review, overdue) and immediately trigger matching tasks and escalations.
+              </p>
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="space-y-5 py-1">
+        <div className="space-y-4 py-1">
           <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200/80 rounded-xl p-4 text-emerald-900">
             <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="text-sm font-bold">Workflow Scan Completed Successfully</h4>
+              <h4 className="text-sm font-bold">Workflow Scan Completed</h4>
               <p className="text-xs text-emerald-700 mt-0.5">
-                All active applications were analyzed against pipeline SLA policies.
+                {simulatedCases.length > 0 
+                  ? `Injected ${simulatedCases.length} new cases (${simulatedCases.join(', ')}) and evaluated SLA rules.`
+                  : 'All active applications evaluated against pipeline SLA rules.'}
               </p>
             </div>
           </div>
@@ -147,11 +186,11 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
               <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Applications Analyzed</span>
+                <span>Applications Checked</span>
                 <Activity className="w-4 h-4 text-slate-400" />
               </div>
               <div className="text-2xl font-bold text-slate-900">{result.applications_checked}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Total uncompleted cases</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Active cases in pipeline</div>
             </div>
 
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
@@ -160,25 +199,25 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
                 <Clock className="w-4 h-4 text-indigo-500" />
               </div>
               <div className="text-2xl font-bold text-indigo-600">{result.tasks_created}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Dispatched to work queues</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Dispatched to workbox</div>
             </div>
 
             <div className="p-3.5 bg-rose-50/70 rounded-xl border border-rose-200/80">
               <div className="flex items-center justify-between text-xs text-rose-700 mb-1">
-                <span>Escalations Triggered</span>
+                <span>Escalations Created</span>
                 <AlertTriangle className="w-4 h-4 text-rose-600" />
               </div>
               <div className="text-2xl font-bold text-rose-700">{result.escalations_created}</div>
-              <div className="text-[11px] text-rose-600 mt-0.5">Direct manager alerts</div>
+              <div className="text-[11px] text-rose-600 mt-0.5">Manager level alerts</div>
             </div>
 
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
               <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                <span>Tasks Maintained</span>
+                <span>Existing Maintained</span>
                 <ShieldCheck className="w-4 h-4 text-slate-400" />
               </div>
               <div className="text-2xl font-bold text-slate-700">{result.tasks_already_existing}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Prevented duplicate alerts</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Duplicate prevention</div>
             </div>
           </div>
         </div>

@@ -12,9 +12,19 @@ The system uses a modern web stack:
 
 ### Workflow Rules Implemented
 1. **Assignment Task**: If an application is OPEN and NOT CLAIMED for > 1 day, create an ASSIGNMENT task for an Admin.
-2. **Follow-up Task**: If an application has been CLAIMED by a user for > 1 day, create a FOLLOW_UP task.
-3. **Escalation Task**: If an application has been CLAIMED for > 2 days, create an ESCALATION task for the manager (next role in hierarchy).
+2. **Follow-up Task**: If an application has been CLAIMED by a Claimed Officer for > 1 day, create a FOLLOW_UP task for that officer.
+3. **Escalation Task**: If an application has been CLAIMED for > 2 days, create an ESCALATION task for that officer's designated Manager (determined via `manager_user_id`).
 - *Idempotency*: Ensures that duplicate tasks are not created if one already exists for a specific application and rule.
+
+### Role Model & Organizational Hierarchy
+The platform uses a standardized 3-tier organizational hierarchy:
+$$\text{Admin} \longrightarrow \text{Manager} \longrightarrow \text{Claimed Officer}$$
+
+- **Admin** (e.g. Alice Admin): Supervisory/administrative user. Monitors applications, full portfolio health, and handles unclaimed assignment tasks.
+- **Manager** (e.g. Diana Manager): Supervises operational officers, monitors team cases, and resolves manager escalations.
+- **Claimed Officer** (e.g. Bob Officer, Charlie Officer): Internal employees who claim and process loan applications.
+
+> **DEMO ROLE SIMULATION DISCLAIMER**: The frontend Role Switcher is strictly a demonstration feature allowing quick persona simulation across Admin, Manager, and Claimed Officer perspectives. It is **not** an authentication or authorization system and does not enforce security boundaries.
 
 ## Database Configuration (Neon DB)
 

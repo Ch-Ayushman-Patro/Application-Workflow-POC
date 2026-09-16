@@ -44,7 +44,7 @@ def calculate_summary(db: Session):
                 total_waiting += waiting
                 total_human_processing += processing
                 
-                stage = app.current_role or "Unassigned"
+                stage = app.current_stage or app.current_role or "Unassigned"
                 stage_waiting[stage] = stage_waiting.get(stage, 0) + waiting
             else:
                 waiting = (app_completed - app_created).total_seconds()
@@ -66,7 +66,7 @@ def calculate_summary(db: Session):
                 total_waiting += waiting
                 total_human_processing += processing
                 
-                stage = app.current_role or "Unassigned"
+                stage = app.current_stage or app.current_role or "Unassigned"
                 stage_waiting[stage] = stage_waiting.get(stage, 0) + waiting
 
     avg_processing = (total_human_processing / total) / 3600.0 if total > 0 else 0

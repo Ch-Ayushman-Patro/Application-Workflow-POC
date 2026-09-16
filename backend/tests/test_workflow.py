@@ -44,15 +44,15 @@ def test_workflow_engine_creates_followup_and_escalation(db):
     db.add(u_admin)
     db.commit()
     
-    u_proc = User(name="Test Proc", role="Processor", manager_user_id=u_admin.id)
-    db.add(u_proc)
+    u_officer = User(name="Test Officer", role="Claimed Officer", manager_user_id=u_admin.id)
+    db.add(u_officer)
     db.commit()
 
     app = Application(
         application_number="TEST-CLAIM-2",
         status=ApplicationStatus.CLAIMED,
-        claimed_by_user_id=u_proc.id,
-        current_role="Processor",
+        claimed_by_user_id=u_officer.id,
+        current_role="Claimed Officer",
         created_at=now - timedelta(days=4),
         claimed_at=now - timedelta(days=3)
     )
