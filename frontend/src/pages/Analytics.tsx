@@ -109,7 +109,7 @@ export default function Analytics() {
         <div className="space-y-2">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Key Finding</p>
           <h3 className="text-xl sm:text-2xl font-bold">
-            {waitingPercentage}% of the time, cases are just{" "}
+            {waitingPercentage}% of the time, cases are just{""}
             <span className="text-amber-400">sitting and waiting</span>
           </h3>
           <p className="text-sm text-slate-300">
