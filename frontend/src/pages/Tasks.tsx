@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { getTasks, completeTask, simulateInflow } from "../services/api";
+import { useTasks, useCompleteTask, useSimulateInflow } from "../hooks/useWorkflowQueries";
 import type { Task } from "../types";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -21,8 +21,10 @@ import {
   CheckCircle2, 
   ArrowUpRight,
   InboxIcon,
-  Sparkles
+  Sparkles,
+  Filter
 } from "lucide-react";
+import { useRole } from "../context/RoleContext";
 
 // Simplified human-readable task type labels
 const taskTypeLabel = (type: string) => {
@@ -33,62 +35,44 @@ const taskTypeLabel = (type: string) => {
 };
 
 const taskTypeDescription = (type: string) => {
-  if (type === "ESCALATION") return "This case has been stuck too long. Manager needs to step in.";
-  if (type === "FOLLOW_UP") return "The assigned officer hasn't completed this case within the expected time.";
-  if (type === "ASSIGNMENT") return "This case has no one working on it. An admin needs to assign it.";
+  if (type === "ESCALATION") return "This case has breached SLA (> 48h). Manager needs to step in.";
+  if (type === "FOLLOW_UP") return "Claimed Officer review SLA reached (> 24h). Officer follow-up required.";
+  if (type === "ASSIGNMENT") return "Unclaimed case sitting > 24h. Admin assignment needed.";
   return "";
 };
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [simulating, setSimulating] = useState(false);
+  const { currentUser, currentRole } = useRole();
   const [activeTab, setActiveTab] = useState<string>("OPEN");
+  const [scopeFilter, setScopeFilter] = useState<"MY_ROLE" | "ALL">("MY_ROLE");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [completing, setCompleting] = useState(false);
+
+  // Cached server-state query
+  const { data: tasks = [], isLoading: loadingTasks } = useTasks();
+
+  // Targeted mutations
+  const completeMutation = useCompleteTask();
+  const simulateMutation = useSimulateInflow();
+
+  const loading = loadingTasks && tasks.length === 0;
+  const completing = completeMutation.isPending;
+  const simulating = simulateMutation.isPending;
 
   const handleSimulate = async () => {
-    setSimulating(true);
     try {
-      await simulateInflow(3, true);
-      window.dispatchEvent(new CustomEvent('workflow-run-completed'));
-      await loadTasks();
+      await simulateMutation.mutateAsync({ count: 3, runWorkflow: true });
     } catch (err) {
-      console.error(err);
-    } finally {
-      setSimulating(false);
+      console.error("Failed to simulate inflow", err);
     }
   };
-
-  const loadTasks = async () => {
-    try {
-      const data = await getTasks();
-      setTasks(data);
-    } catch (err) {
-      console.error("Failed to load tasks", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadTasks();
-    const handleWorkflowRun = () => loadTasks();
-    window.addEventListener('workflow-run-completed', handleWorkflowRun);
-    return () => window.removeEventListener('workflow-run-completed', handleWorkflowRun);
-  }, []);
 
   const handleComplete = async () => {
     if (!selectedTask) return;
-    setCompleting(true);
     try {
-      await completeTask(selectedTask.id);
+      await completeMutation.mutateAsync(selectedTask.id);
       setSelectedTask(null);
-      await loadTasks();
     } catch (err) {
-      console.error(err);
-    } finally {
-      setCompleting(false);
+      console.error("Failed to complete task", err);
     }
   };
 
@@ -96,16 +80,33 @@ export default function Tasks() {
   const completedTasks = tasks.filter(t => t.status === "COMPLETED");
   const escalations = openTasks.filter(t => t.task_type === "ESCALATION");
 
-  const filteredTasks = activeTab === "OPEN" ? openTasks : completedTasks;
+  const tabScopedTasks = activeTab === "OPEN" ? openTasks : completedTasks;
+
+  const filteredTasks = tabScopedTasks.filter((t) => {
+    if (scopeFilter === "ALL") return true;
+    if (currentRole === "Claimed Officer") {
+      return t.assigned_to_user_id === currentUser.id || t.assigned_to_role === "Claimed Officer";
+    }
+    if (currentRole === "Manager") {
+      return t.task_type === "ESCALATION" || t.assigned_to_user_id === currentUser.id;
+    }
+    // Admin sees all open tasks by default
+    return true;
+  });
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Task Inbox</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Task Inbox</h2>
+            <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-slate-200/80 text-slate-700 border border-slate-300">
+              Perspective: {currentRole}
+            </span>
+          </div>
           <p className="text-sm text-slate-500 mt-0.5">
-            To-dos and alerts automatically generated by the workflow engine.
+            SLA action items, intake assignments, and manager escalations.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -127,24 +128,52 @@ export default function Tasks() {
         </div>
       </div>
 
-      {/* Simple 2-tab Switch */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setActiveTab("OPEN")}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "OPEN" ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-          }`}
-        >
-          Open Tasks ({openTasks.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("COMPLETED")}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "COMPLETED" ? "bg-emerald-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-          }`}
-        >
-          Resolved ({completedTasks.length})
-        </button>
+      {/* Tabs & Scope Toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab("OPEN")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "OPEN" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            Open Tasks ({openTasks.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("COMPLETED")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "COMPLETED" ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            Resolved ({completedTasks.length})
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1.5 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 text-xs">
+          <span className="text-slate-400 flex items-center gap-1 text-[11px] font-medium mr-1">
+            <Filter className="w-3 h-3" /> Scope:
+          </span>
+          <button
+            onClick={() => setScopeFilter("MY_ROLE")}
+            className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+              scopeFilter === "MY_ROLE" 
+                ? "bg-indigo-50 text-indigo-700 font-bold border border-indigo-200" 
+                : "text-slate-500 hover:bg-slate-100"
+            }`}
+          >
+            My Role ({currentRole})
+          </button>
+          <button
+            onClick={() => setScopeFilter("ALL")}
+            className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+              scopeFilter === "ALL" 
+                ? "bg-indigo-50 text-indigo-700 font-bold border border-indigo-200" 
+                : "text-slate-500 hover:bg-slate-100"
+            }`}
+          >
+            All Operations
+          </button>
+        </div>
       </div>
 
       {/* Task Table */}

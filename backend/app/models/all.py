@@ -18,6 +18,11 @@ class TaskStatus(str, enum.Enum):
     OPEN = "OPEN"
     COMPLETED = "COMPLETED"
 
+class UserRole(str, enum.Enum):
+    ADMIN = "Admin"
+    MANAGER = "Manager"
+    CLAIMED_OFFICER = "Claimed Officer"
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)

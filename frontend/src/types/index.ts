@@ -1,7 +1,9 @@
+export type UserRole = "Admin" | "Manager" | "Claimed Officer";
+
 export interface User {
     id: number;
     name: string;
-    role: string;
+    role: UserRole | string;
     manager_user_id?: number;
 }
 

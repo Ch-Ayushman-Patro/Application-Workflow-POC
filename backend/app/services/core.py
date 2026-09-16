@@ -26,6 +26,7 @@ def claim_application(db: Session, app_id: int, user_id: int):
     app.status = ApplicationStatus.CLAIMED
     app.claimed_by_user_id = user_id
     app.claimed_at = datetime.now(timezone.utc)
+    app.current_stage = "Claimed Officer Review"
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         app.current_role = user.role
@@ -40,6 +41,7 @@ def complete_application(db: Session, app_id: int, actor_id: int = None):
         return None
     app.status = ApplicationStatus.COMPLETED
     app.completed_at = datetime.now(timezone.utc)
+    app.current_stage = "Completed"
     db.commit()
     db.refresh(app)
     create_event(db, app.id, "APPLICATION_COMPLETED", actor_id=actor_id)

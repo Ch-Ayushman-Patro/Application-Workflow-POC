@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { runWorkflow, simulateInflow } from '../services/api';
+import { useRunWorkflow, useSimulateInflow } from '../hooks/useWorkflowQueries';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { 
@@ -22,7 +22,6 @@ export interface WorkflowRunModalProps {
 }
 
 export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModalProps) {
-  const [running, setRunning] = useState(false);
   const [simulatedCases, setSimulatedCases] = useState<string[]>([]);
   const [result, setResult] = useState<{
     applications_checked: number;
@@ -31,36 +30,29 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
     escalations_created: number;
   } | null>(null);
 
-  const notifyChange = () => {
-    window.dispatchEvent(new CustomEvent('workflow-run-completed'));
-    if (onSuccess) onSuccess();
-  };
+  const runWorkflowMutation = useRunWorkflow();
+  const simulateInflowMutation = useSimulateInflow();
+  const running = runWorkflowMutation.isPending || simulateInflowMutation.isPending;
 
   const handleExecuteOnly = async () => {
-    setRunning(true);
     setSimulatedCases([]);
     try {
-      const data = await runWorkflow();
+      const data = await runWorkflowMutation.mutateAsync();
       setResult(data);
-      notifyChange();
+      if (onSuccess) onSuccess();
     } catch (err) {
       console.error(err);
-    } finally {
-      setRunning(false);
     }
   };
 
   const handleSimulateAndRun = async () => {
-    setRunning(true);
     try {
-      const response = await simulateInflow(3, true);
+      const response = await simulateInflowMutation.mutateAsync({ count: 3, runWorkflow: true });
       setSimulatedCases(response.application_numbers || []);
       setResult(response.workflow_stats);
-      notifyChange();
+      if (onSuccess) onSuccess();
     } catch (err) {
       console.error(err);
-    } finally {
-      setRunning(false);
     }
   };
 

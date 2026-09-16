@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
-import { getAnalyticsSummary } from "../services/api";
-import type { AnalyticsSummary } from "../types";
+import { Link } from "react-router-dom";
 import { 
   BarChart, 
   Bar, 
@@ -13,33 +11,75 @@ import {
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/Card";
 import { Skeleton } from "../components/ui/Skeleton";
-import { Clock } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Clock, ShieldAlert, ArrowLeft, UserCheck } from "lucide-react";
 import { formatHoursToDaysAndHours } from "../utils/formatters";
+import { useRole } from "../context/RoleContext";
+import { useAnalyticsSummary } from "../hooks/useWorkflowQueries";
 
 export default function Analytics() {
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { currentRole, switchRoleUser, allUsers } = useRole();
+  const isAdmin = currentRole === "Admin";
 
-  useEffect(() => {
-    getAnalyticsSummary()
-      .then((data) => setSummary(data))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+  // STRICT REQUIREMENT: Do NOT trigger analytics API request when currentRole is not Admin
+  const { data: summary, isLoading } = useAnalyticsSummary({ enabled: isAdmin });
 
-    const handleWorkflowRun = () => {
-      getAnalyticsSummary().then(setSummary).catch(console.error);
-    };
-    window.addEventListener('workflow-run-completed', handleWorkflowRun);
-    return () => window.removeEventListener('workflow-run-completed', handleWorkflowRun);
-  }, []);
+  // If user is not Admin, display Access Restricted view and do NOT fetch analytics data
+  if (!isAdmin) {
+    const adminUser = allUsers.find((u) => u.role === "Admin");
 
-  if (loading || !summary) {
+    return (
+      <div className="py-16 text-center max-w-lg mx-auto space-y-5">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Access Restricted</h2>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            Process Intelligence, queue latency split, and bottleneck analysis are reserved exclusively for the <strong>Admin</strong> perspective.
+          </p>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-800 text-left">
+            <span className="font-semibold block mb-0.5">Demo Role Simulation Note:</span>
+            This role restriction is designed to demonstrate role-tailored views. It is <strong>not</strong> an authentication or authorization security boundary.
+          </div>
+        </div>
+
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link to="/">
+            <Button variant="outline" size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />}>
+              Return to Command Center
+            </Button>
+          </Link>
+          {adminUser && (
+            <Button 
+              variant="primary" 
+              size="sm" 
+              onClick={() => switchRoleUser(adminUser.id)}
+              icon={<UserCheck className="w-3.5 h-3.5" />}
+            >
+              Simulate as {adminUser.name} (Admin)
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading && !summary) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-2xl" />)}
         </div>
         <Skeleton className="h-80 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="py-16 text-center text-slate-500 text-sm">
+        No analytics data available.
       </div>
     );
   }
@@ -74,11 +114,18 @@ export default function Analytics() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics</h2>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Understand how long cases take, and where the delays are happening.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Process Intelligence</h2>
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+              Admin View
+            </span>
+          </div>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Understand how long cases take, and where the queue delays are accumulating.
+          </p>
+        </div>
       </div>
 
       {/* Key Numbers */}
@@ -110,12 +157,12 @@ export default function Analytics() {
         <div className="space-y-2">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Key Finding</p>
           <h3 className="text-xl sm:text-2xl font-bold">
-            {waitingPercentage}% of the time, cases are just{""}
+            {waitingPercentage}% of the time, cases are just{" "}
             <span className="text-amber-400">sitting and waiting</span>
           </h3>
           <p className="text-sm text-slate-300">
-            Only {processingPercentage}% of the total lifecycle involves actual human work. The rest is idle time in queues.
-            The biggest bottleneck is the <strong className="text-white">{summary.bottleneck_stage}</strong> stage.
+            Only {processingPercentage}% of the total lifecycle involves active human touch time. The rest is idle time in queues.
+            The primary bottleneck is <strong className="text-white">{summary.bottleneck_stage}</strong>.
           </p>
         </div>
         <div className="shrink-0 grid grid-cols-2 gap-3 text-center">

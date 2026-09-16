@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -8,45 +8,49 @@ import {
   Play, 
   Bell, 
   ShieldCheck, 
-  Search, 
-  User, 
   ChevronRight,
+  ChevronDown,
   Workflow
 } from "lucide-react";
 import { WorkflowRunModal } from "./WorkflowRunModal";
-import { getTasks } from "../services/api";
+import { useRole } from "../context/RoleContext";
+import { useTasks } from "../hooks/useWorkflowQueries";
 
 export default function Layout() {
   const location = useLocation();
+  const { currentUser, currentRole, allUsers, setCurrentUser } = useRole();
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
-  const [openTasksCount, setOpenTasksCount] = useState<number>(0);
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
 
-  const fetchQuickStats = () => {
-    getTasks()
-      .then(tasks => {
-        setOpenTasksCount(tasks.filter(t => t.status === "OPEN").length);
-      })
-      .catch(() => {});
-  };
+  // Cached, reactive tasks query
+  const { data: tasks = [] } = useTasks();
 
-  useEffect(() => {
-    fetchQuickStats();
-    const interval = setInterval(fetchQuickStats, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  const openTasksCount = useMemo(() => {
+    const open = tasks.filter(t => t.status === "OPEN");
+    if (currentRole === "Admin") {
+      return open.length;
+    } else if (currentRole === "Claimed Officer") {
+      return open.filter(t => t.assigned_to_user_id === currentUser.id || t.assigned_to_role === "Claimed Officer").length;
+    } else if (currentRole === "Manager") {
+      return open.filter(t => t.task_type === "ESCALATION" || t.assigned_to_user_id === currentUser.id).length;
+    }
+    return open.length;
+  }, [tasks, currentRole, currentUser.id]);
 
-  const navItems = [
+  const allNavItems = [
     { 
       name: "Command Center", 
       path: "/", 
       icon: LayoutDashboard,
-      description: "Pipeline pulse & urgent risks"
+      description: "Pipeline pulse & urgent risks",
+      adminOnly: false,
     },
     { 
       name: "Case Pipeline", 
       path: "/applications", 
       icon: Layers,
-      description: "Lifecycle tracking & cases"
+      description: "Lifecycle tracking & cases",
+      adminOnly: false,
     },
     { 
       name: "Task Inbox", 
@@ -54,15 +58,20 @@ export default function Layout() {
       icon: CheckSquare,
       badge: openTasksCount > 0 ? openTasksCount : undefined,
       badgeVariant: "error" as const,
-      description: "Actionable assignments & escalations"
+      description: "Actionable assignments & escalations",
+      adminOnly: false,
     },
     { 
       name: "Process Intelligence", 
       path: "/analytics", 
       icon: BarChart3,
-      description: "Bottlenecks & SLA timing"
+      description: "Bottlenecks & SLA timing",
+      adminOnly: true,
     },
   ];
+
+  // Process Intelligence is only accessible to Admin
+  const navItems = allNavItems.filter(item => !item.adminOnly || currentRole === "Admin");
 
   const getPageTitle = () => {
     if (location.pathname === "/") return { title: "Command Center", subtitle: "Live operations & risk monitoring" };
@@ -163,16 +172,74 @@ export default function Layout() {
           </button>
         </div>
 
-        {/* User Card */}
-        <div className="p-3.5 border-t border-slate-900 bg-slate-950">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-950 border border-indigo-700/50 flex items-center justify-center text-indigo-300 font-semibold text-xs">
-              <User className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-white truncate">Operations Lead</div>
-              <div className="text-[11px] text-slate-500 truncate">Admin / Supervisor</div>
-            </div>
+        {/* Role Simulation Switcher (DEMO ONLY) */}
+        <div className="p-3.5 border-t border-slate-900 bg-slate-950 relative">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Demo Role Switcher</span>
+            <span 
+              className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" 
+              title="Demo role simulation only. NOT authentication or security."
+            >
+              Demo Sim
+            </span>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+              className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 transition-colors text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                  currentRole === "Admin" ? "bg-purple-600/20 text-purple-400 border border-purple-500/30" :
+                  currentRole === "Manager" ? "bg-blue-600/20 text-blue-400 border border-blue-500/30" :
+                  "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30"
+                }`}>
+                  {currentUser.name.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-white truncate">{currentUser.name}</div>
+                  <div className="text-[11px] text-slate-400 truncate">{currentRole}</div>
+                </div>
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isRoleDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {isRoleDropdownOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 p-1.5 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 space-y-1">
+                <div className="px-2 py-1 text-[10px] text-slate-400 font-medium border-b border-slate-800/80 mb-1 flex items-center justify-between">
+                  <span>Switch Persona:</span>
+                  <span className="text-[9px] text-slate-500">(Demo only)</span>
+                </div>
+                {allUsers.map((u) => {
+                  const isSelected = u.id === currentUser.id;
+                  const roleBadgeClass = 
+                    u.role === "Admin" ? "text-purple-400" :
+                    u.role === "Manager" ? "text-blue-400" :
+                    "text-emerald-400";
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        setCurrentUser(u);
+                        setIsRoleDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                        isSelected ? "bg-indigo-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex flex-col items-start min-w-0">
+                        <span className="font-medium truncate">{u.name}</span>
+                        <span className={`text-[10px] ${isSelected ? "text-indigo-200" : roleBadgeClass}`}>
+                          {u.role}
+                        </span>
+                      </div>
+                      {isSelected && <span className="text-[11px] font-bold">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -196,9 +263,17 @@ export default function Layout() {
 
           {/* Right header actions */}
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-100/80 border border-slate-200/60 rounded-xl text-xs text-slate-500">
-              <Search className="w-3.5 h-3.5 text-slate-400" />
-              <span>Type / to search cases or tasks</span>
+            {/* Demo Persona Indicator */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100/90 border border-slate-200 rounded-xl text-xs">
+              <span className="text-slate-500 text-[11px] hidden md:inline">Viewing as:</span>
+              <span className="font-semibold text-slate-800">{currentUser.name}</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                currentRole === "Admin" ? "bg-purple-100 text-purple-700 border border-purple-200" :
+                currentRole === "Manager" ? "bg-blue-100 text-blue-700 border border-blue-200" :
+                "bg-emerald-100 text-emerald-700 border border-emerald-200"
+              }`}>
+                {currentRole}
+              </span>
             </div>
 
             <button 
@@ -234,11 +309,6 @@ export default function Layout() {
       <WorkflowRunModal 
         isOpen={isRunModalOpen} 
         onClose={() => setIsRunModalOpen(false)}
-        onSuccess={() => {
-          fetchQuickStats();
-          // Trigger a window event so active pages can reload data smoothly
-          window.dispatchEvent(new CustomEvent('workflow-run-completed'));
-        }}
       />
     </div>
   );

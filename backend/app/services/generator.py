@@ -1,7 +1,7 @@
 import random
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from app.models.all import User, Application, ApplicationStatus, ApplicationEvent
+from app.models.all import User, Application, ApplicationStatus, ApplicationEvent, UserRole
 from app.workflow.rule_engine import WorkflowEngine
 
 def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True):
@@ -13,8 +13,8 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
     if not users:
         return {"cases_created": 0, "application_numbers": [], "workflow_stats": None}
     
-    # Operational staff for assignments
-    operational_users = [u for u in users if u.role in ["Processor", "Underwriter"]]
+    # Claimed Officers for case assignment
+    operational_users = [u for u in users if u.role == UserRole.CLAIMED_OFFICER.value]
     if not operational_users:
         operational_users = users
 
@@ -34,7 +34,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
     
     # 5 realistic scenarios:
     # 1. UNCLAIMED_BREACH: sitting open > 24h -> triggers ASSIGNMENT task for Admin
-    # 2. FOLLOW_UP_BREACH: claimed > 24h -> triggers FOLLOW_UP task for claimed user
+    # 2. FOLLOW_UP_BREACH: claimed > 24h -> triggers FOLLOW_UP task for Claimed Officer
     # 3. ESCALATION_BREACH: claimed > 48h -> triggers ESCALATION to Manager + FOLLOW_UP
     # 4. FRESH_OPEN: arrived recently -> healthy unclaimed
     # 5. FRESH_CLAIMED: claimed recently -> healthy in-progress
@@ -54,8 +54,8 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.OPEN,
-                current_role="Intake Queue",
-                current_stage="New Intake",
+                current_role="Admin",
+                current_stage="New Intake Queue",
                 created_at=created_at
             )
             db.add(app)
@@ -80,7 +80,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 status=ApplicationStatus.CLAIMED,
                 claimed_by_user_id=assignee.id,
                 current_role=assignee.role,
-                current_stage=f"{assignee.role} Verification",
+                current_stage="Claimed Officer Review",
                 created_at=created_at,
                 claimed_at=claimed_at
             )
@@ -102,7 +102,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 status=ApplicationStatus.CLAIMED,
                 claimed_by_user_id=assignee.id,
                 current_role=assignee.role,
-                current_stage="Detailed Credit Review",
+                current_stage="Claimed Officer Review",
                 created_at=created_at,
                 claimed_at=claimed_at
             )
@@ -117,8 +117,8 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.OPEN,
-                current_role="Intake Queue",
-                current_stage="New Intake",
+                current_role="Admin",
+                current_stage="New Intake Queue",
                 created_at=created_at
             )
             db.add(app)
@@ -135,7 +135,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 status=ApplicationStatus.CLAIMED,
                 claimed_by_user_id=assignee.id,
                 current_role=assignee.role,
-                current_stage=f"Active {assignee.role} Review",
+                current_stage="Claimed Officer Review",
                 created_at=created_at,
                 claimed_at=claimed_at
             )
@@ -159,4 +159,3 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
         "application_numbers": created_cases,
         "workflow_stats": workflow_stats
     }
-

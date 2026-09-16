@@ -1,7 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { getApplications, getUsers, claimApplication, completeApplication, simulateInflow } from "../services/api";
-import type { Application, User } from "../types";
+import { 
+  useApplications, 
+  useUsers, 
+  useClaimApplication, 
+  useCompleteApplication, 
+  useSimulateInflow 
+} from "../hooks/useWorkflowQueries";
+import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
@@ -28,78 +34,53 @@ import {
   Layers,
   Sparkles
 } from "lucide-react";
+import { useRole } from "../context/RoleContext";
 
 export default function Applications() {
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [simulating, setSimulating] = useState(false);
+  const { currentUser, currentRole } = useRole();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   
   const [claimTargetApp, setClaimTargetApp] = useState<Application | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<number | "">(""  );
-  const [actionLoading, setActionLoading] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | "">("");
+
+  // Cached server-state queries
+  const { data: applications = [], isLoading: loadingApps } = useApplications();
+  const { data: users = [], isLoading: loadingUsers } = useUsers();
+
+  // Targeted mutations
+  const claimMutation = useClaimApplication();
+  const completeMutation = useCompleteApplication();
+  const simulateMutation = useSimulateInflow();
+
+  const loading = (loadingApps && applications.length === 0) || (loadingUsers && users.length === 0);
+  const simulating = simulateMutation.isPending;
+  const actionLoading = claimMutation.isPending || completeMutation.isPending;
 
   const handleSimulate = async () => {
-    setSimulating(true);
     try {
-      await simulateInflow(3, true);
-      window.dispatchEvent(new CustomEvent('workflow-run-completed'));
-      await loadData();
+      await simulateMutation.mutateAsync({ count: 3, runWorkflow: true });
     } catch (err) {
-      console.error(err);
-    } finally {
-      setSimulating(false);
+      console.error("Failed to simulate inflow", err);
     }
   };
-
-  const loadData = async () => {
-    try {
-      const [appsData, usersData] = await Promise.all([
-        getApplications(),
-        getUsers()
-      ]);
-      setApplications(appsData);
-      setUsers(usersData);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-    const handleWorkflowRun = () => loadData();
-    window.addEventListener('workflow-run-completed', handleWorkflowRun);
-    return () => window.removeEventListener('workflow-run-completed', handleWorkflowRun);
-  }, []);
 
   const handleClaimSubmit = async () => {
     if (!claimTargetApp || !selectedUserId) return;
-    setActionLoading(true);
     try {
-      await claimApplication(claimTargetApp.id, Number(selectedUserId));
+      await claimMutation.mutateAsync({ id: claimTargetApp.id, userId: Number(selectedUserId) });
       setClaimTargetApp(null);
       setSelectedUserId("");
-      await loadData();
     } catch (err) {
       console.error("Failed to claim application", err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
   const handleCompleteApp = async (appId: number) => {
-    setActionLoading(true);
     try {
-      await completeApplication(appId);
-      await loadData();
+      await completeMutation.mutateAsync(appId);
     } catch (err) {
       console.error("Failed to complete application", err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -109,7 +90,9 @@ export default function Applications() {
 
     const risk = getApplicationRisk(app);
     let matchesStatus = true;
-    if (statusFilter === "UNCLAIMED") {
+    if (statusFilter === "MY_CASES") {
+      matchesStatus = app.claimed_by_user_id === currentUser.id;
+    } else if (statusFilter === "UNCLAIMED") {
       matchesStatus = app.status === "OPEN" && !app.claimed_by_user_id;
     } else if (statusFilter === "IN_PROGRESS") {
       matchesStatus = app.status === "CLAIMED";
@@ -124,6 +107,7 @@ export default function Applications() {
 
   const counts = {
     all: applications.length,
+    myCases: applications.filter(a => a.claimed_by_user_id === currentUser.id).length,
     unclaimed: applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id).length,
     inProgress: applications.filter(a => a.status === "CLAIMED").length,
     overdue: applications.filter(a => {
@@ -135,6 +119,7 @@ export default function Applications() {
 
   const tabs = [
     { key: "ALL", label: `All (${counts.all})`, activeColor: "bg-slate-900 text-white" },
+    ...(currentRole === "Claimed Officer" ? [{ key: "MY_CASES", label: `My Claimed (${counts.myCases})`, activeColor: "bg-emerald-600 text-white" }] : []),
     { key: "UNCLAIMED", label: `Unclaimed (${counts.unclaimed})`, activeColor: "bg-amber-600 text-white" },
     { key: "IN_PROGRESS", label: `In Progress (${counts.inProgress})`, activeColor: "bg-indigo-600 text-white" },
     { key: "OVERDUE", label: `Overdue (${counts.overdue})`, activeColor: "bg-rose-600 text-white" },
@@ -212,7 +197,7 @@ export default function Applications() {
               <TableRow>
                 <TableHead>Application</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Assigned To</TableHead>
+                <TableHead>Claimed Officer</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -238,23 +223,32 @@ export default function Applications() {
                         <ArrowUpRight className="w-3 h-3 text-slate-400" />
                       </Link>
                       <div className="text-[11px] text-slate-500 mt-0.5">
-                        {app.current_role || "Unassigned stage"}
+                        {app.current_stage || "Intake"}
                       </div>
                     </TableCell>
 
                     {/* Status */}
                     <TableCell>
-                      <Badge variant={risk.badgeVariant} dot pulse={risk.level === "escalated"}>
-                        {risk.label}
-                      </Badge>
-                      {openAppTasks.length > 0 && (
-                        <div className="text-[10px] text-slate-500 mt-1">
-                          {openAppTasks.length} open {openAppTasks.length === 1 ? 'task' : 'tasks'}
-                        </div>
-                      )}
+                      <div className="space-y-1">
+                        <Badge
+                          variant={
+                            app.status === "COMPLETED" ? "success" :
+                            app.status === "CLAIMED" ? "info" :
+                            "warning"
+                          }
+                          dot
+                        >
+                          {app.status === "OPEN" ? "UNCLAIMED" : app.status}
+                        </Badge>
+                        {app.status !== "COMPLETED" && (
+                          <div className="text-[11px] text-slate-500">
+                            Risk: <span className="font-medium text-slate-700">{risk.label}</span>
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
 
-                    {/* Assigned To */}
+                    {/* Claimed Officer */}
                     <TableCell>
                       {app.claimed_by ? (
                         <div className="flex items-center gap-2">
@@ -292,13 +286,18 @@ export default function Applications() {
                             variant="primary"
                             onClick={() => {
                               setClaimTargetApp(app);
-                              const claimable = users.filter((u) => u.role === "Processor" || u.role === "Underwriter");
-                              if (claimable.length > 0) setSelectedUserId(claimable[0].id);
-                              else if (users.length > 0) setSelectedUserId(users[0].id);
+                              const claimable = users.filter((u) => u.role === "Claimed Officer");
+                              if (currentRole === "Claimed Officer") {
+                                setSelectedUserId(currentUser.id);
+                              } else if (claimable.length > 0) {
+                                setSelectedUserId(claimable[0].id);
+                              } else if (users.length > 0) {
+                                setSelectedUserId(users[0].id);
+                              }
                             }}
                             icon={<UserCheck className="w-3 h-3" />}
                           >
-                            Claim
+                            {currentRole === "Claimed Officer" ? "Claim Case" : "Assign"}
                           </Button>
                         )}
                         {app.status === "CLAIMED" && (
@@ -328,8 +327,8 @@ export default function Applications() {
       <Modal
         isOpen={!!claimTargetApp}
         onClose={() => setClaimTargetApp(null)}
-        title="Claim this Application"
-        description={`Assign ${claimTargetApp?.application_number} to a team member. The SLA timer will start immediately.`}
+        title="Assign Case to Claimed Officer"
+        description={`Assign ${claimTargetApp?.application_number} to a Claimed Officer. The review SLA timer will begin immediately.`}
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setClaimTargetApp(null)}>
@@ -341,7 +340,7 @@ export default function Applications() {
               onClick={handleClaimSubmit}
               loading={actionLoading}
             >
-              Confirm
+              Confirm Assignment
             </Button>
           </>
         }
@@ -349,20 +348,21 @@ export default function Applications() {
         <div className="space-y-4 py-2">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Assign to
+              Assign to Claimed Officer
             </label>
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              {users
-                .filter((u) => u.role === "Processor" || u.role === "Underwriter")
-                .map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} — {u.role}
-                  </option>
-                ))}
+              {(users.filter((u) => u.role === "Claimed Officer").length > 0 
+                ? users.filter((u) => u.role === "Claimed Officer") 
+                : users
+              ).map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} — {u.role}
+                </option>
+              ))}
             </select>
           </div>
         </div>
