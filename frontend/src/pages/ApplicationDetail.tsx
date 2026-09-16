@@ -18,7 +18,8 @@ import {
   getApplicationRisk, 
   getApplicationAgeHours, 
   formatDate, 
-  formatRelativeTime 
+  formatRelativeTime,
+  formatHoursToDaysAndHours
 } from "../utils/formatters";
 import { 
   ArrowLeft, 
@@ -207,7 +208,7 @@ export default function ApplicationDetail() {
               <span>•</span>
               <span className="flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
-                Pipeline Aging: <strong className="text-slate-700">{ageHours} hours</strong>
+                Pipeline Aging: <strong className="text-slate-700">{formatHoursToDaysAndHours(ageHours)}</strong>
               </span>
             </p>
           </div>
@@ -219,7 +220,9 @@ export default function ApplicationDetail() {
                 variant="primary"
                 size="md"
                 onClick={() => {
-                  if (users.length > 0) setSelectedUserId(users[0].id);
+                  const claimable = users.filter((u) => u.role === "Processor" || u.role === "Underwriter");
+                  if (claimable.length > 0) setSelectedUserId(claimable[0].id);
+                  else if (users.length > 0) setSelectedUserId(users[0].id);
                   setIsClaimModalOpen(true);
                 }}
                 icon={<UserCheck className="w-4 h-4" />}
@@ -453,7 +456,9 @@ export default function ApplicationDetail() {
                     size="xs"
                     variant="primary"
                     onClick={() => {
-                      if (users.length > 0) setSelectedUserId(users[0].id);
+                      const claimable = users.filter((u) => u.role === "Processor" || u.role === "Underwriter");
+                      if (claimable.length > 0) setSelectedUserId(claimable[0].id);
+                      else if (users.length > 0) setSelectedUserId(users[0].id);
                       setIsClaimModalOpen(true);
                     }}
                     className="w-full"
@@ -515,7 +520,7 @@ export default function ApplicationDetail() {
                     <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-slate-700">Overall Elapsed Time</span>
-                        <span className="font-mono font-bold text-slate-900">{totalCalcHours} Hours</span>
+                        <span className="font-mono font-bold text-slate-900">{formatHoursToDaysAndHours(totalCalcHours)}</span>
                       </div>
 
                       {/* Visual Ratio Bar */}
@@ -523,21 +528,21 @@ export default function ApplicationDetail() {
                         <div 
                           style={{ width: `${humanPct}%` }}
                           className="bg-indigo-600 h-full transition-all"
-                          title={`Time spent by human: ${humanHours}h (${humanPct}%)`}
+                          title={`Time spent by human: ${formatHoursToDaysAndHours(humanHours)} (${humanPct}%)`}
                         />
                         <div 
                           style={{ width: `${waitPct}%` }}
                           className="bg-amber-500 h-full transition-all"
-                          title={`Wait time between tasks: ${waitHours}h (${waitPct}%)`}
+                          title={`Wait time between tasks: ${formatHoursToDaysAndHours(waitHours)} (${waitPct}%)`}
                         />
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] pt-1">
                         <span className="text-indigo-700 font-medium">
-                          Human Work: <strong>{humanHours}h</strong> ({humanPct}%)
+                          Human Work: <strong>{formatHoursToDaysAndHours(humanHours)}</strong> ({humanPct}%)
                         </span>
                         <span className="text-amber-800 font-medium">
-                          Wait Time: <strong>{waitHours}h</strong> ({waitPct}%)
+                          Wait Time: <strong>{formatHoursToDaysAndHours(waitHours)}</strong> ({waitPct}%)
                         </span>
                       </div>
                     </div>
@@ -608,11 +613,13 @@ export default function ApplicationDetail() {
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
             >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} — {u.role}
-                </option>
-              ))}
+              {users
+                .filter((u) => u.role === "Processor" || u.role === "Underwriter")
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} — {u.role}
+                  </option>
+                ))}
             </select>
           </div>
         </div>

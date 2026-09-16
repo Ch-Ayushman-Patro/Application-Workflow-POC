@@ -54,3 +54,16 @@ export interface AnalyticsSummary {
     total_escalations: number;
     bottleneck_stage: string;
 }
+
+export interface WorkflowRunResponse {
+    applications_checked: number;
+    tasks_created: number;
+    tasks_already_existing: number;
+    escalations_created: number;
+}
+
+export interface SimulationResponse {
+    cases_created: number;
+    application_numbers: string[];
+    workflow_stats: WorkflowRunResponse;
+}

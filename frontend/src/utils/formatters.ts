@@ -38,6 +38,40 @@ export function getApplicationAgeHours(createdAt: string): number {
   }
 }
 
+/**
+ * Formats hours into "Xd Yh" or "X days Y hrs".
+ * E.g. 108 -> "4d 12h", 53 -> "2d 5h", 18 -> "18h".
+ */
+export function formatHoursToDaysAndHours(hours: number, compact: boolean = true): string {
+  if (hours <= 0) return compact ? '0h' : '0 hours';
+  
+  const totalHours = Math.round(hours);
+  if (totalHours < 1) {
+    const mins = Math.round(hours * 60);
+    return compact ? `${mins}m` : `${mins} mins`;
+  }
+  
+  const days = Math.floor(totalHours / 24);
+  const remainingHours = totalHours % 24;
+  
+  if (days === 0) {
+    return compact ? `${remainingHours}h` : `${remainingHours} hrs`;
+  }
+  
+  if (remainingHours === 0) {
+    return compact ? `${days}d` : `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+  
+  return compact 
+    ? `${days}d ${remainingHours}h` 
+    : `${days} ${days === 1 ? 'day' : 'days'} ${remainingHours} hrs`;
+}
+
+export function formatApplicationAge(createdAt: string, compact: boolean = true): string {
+  const ageHours = getApplicationAgeHours(createdAt);
+  return formatHoursToDaysAndHours(ageHours, compact);
+}
+
 export function getApplicationRisk(app: Application): {
   level: 'normal' | 'attention' | 'at_risk' | 'escalated' | 'completed';
   label: string;

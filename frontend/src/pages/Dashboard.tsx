@@ -12,7 +12,8 @@ import { Skeleton } from "../components/ui/Skeleton";
 import { WorkflowRunModal } from "../components/WorkflowRunModal";
 import { 
   getApplicationRisk, 
-  getApplicationAgeHours
+  formatHoursToDaysAndHours,
+  formatApplicationAge
 } from "../utils/formatters";
 import { 
   AlertTriangle, 
@@ -186,7 +187,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {getApplicationAgeHours(app.created_at)}h old
+                        {formatApplicationAge(app.created_at)} old
                       </span>
                       <span>•</span>
                       <span>{app.claimed_by?.name || 'Unassigned'}</span>
@@ -269,11 +270,11 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between text-[11px] text-slate-500">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
-                    Work ({processingHours}h)
+                    Work ({formatHoursToDaysAndHours(processingHours)})
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                    Waiting ({waitingHours}h — {waitingPercent}%)
+                    Waiting ({formatHoursToDaysAndHours(waitingHours)} — {waitingPercent}%)
                   </span>
                 </div>
               </div>

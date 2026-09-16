@@ -14,6 +14,7 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/Card";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Clock } from "lucide-react";
+import { formatHoursToDaysAndHours } from "../utils/formatters";
 
 export default function Analytics() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -119,11 +120,11 @@ export default function Analytics() {
         </div>
         <div className="shrink-0 grid grid-cols-2 gap-3 text-center">
           <div className="bg-white/10 rounded-xl p-4">
-            <div className="text-2xl font-bold text-indigo-300">{processingHours}h</div>
+            <div className="text-2xl font-bold text-indigo-300">{formatHoursToDaysAndHours(processingHours)}</div>
             <div className="text-xs text-slate-400 mt-1">Avg. work time</div>
           </div>
           <div className="bg-white/10 rounded-xl p-4">
-            <div className="text-2xl font-bold text-amber-400">{waitingHours}h</div>
+            <div className="text-2xl font-bold text-amber-400">{formatHoursToDaysAndHours(waitingHours)}</div>
             <div className="text-xs text-slate-400 mt-1">Avg. wait time</div>
           </div>
         </div>
@@ -161,7 +162,7 @@ export default function Analytics() {
                 />
                 <Tooltip
                   cursor={{ fill: "#f1f5f9" }}
-                  formatter={(value) => [`${value} hours`, "Duration"]}
+                  formatter={(value) => [formatHoursToDaysAndHours(Number(value)), "Duration"]}
                   contentStyle={{
                     borderRadius: "12px",
                     border: "1px solid #e2e8f0",
@@ -182,11 +183,11 @@ export default function Analytics() {
           <div className="flex items-center justify-center gap-8 pt-4 border-t border-slate-100 mt-4 text-xs text-slate-600">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-indigo-600 inline-block" />
-              <span>Human work: <strong>{processingHours}h</strong> ({processingPercentage}%)</span>
+              <span>Human work: <strong>{formatHoursToDaysAndHours(processingHours)}</strong> ({processingPercentage}%)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
-              <span>Waiting idle: <strong>{waitingHours}h</strong> ({waitingPercentage}%)</span>
+              <span>Waiting idle: <strong>{formatHoursToDaysAndHours(waitingHours)}</strong> ({waitingPercentage}%)</span>
             </div>
           </div>
         </CardContent>

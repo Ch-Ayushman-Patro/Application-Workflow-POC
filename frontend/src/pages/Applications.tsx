@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getApplications, getUsers, claimApplication, completeApplication } from "../services/api";
+import { getApplications, getUsers, claimApplication, completeApplication, simulateInflow } from "../services/api";
 import type { Application, User } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -17,26 +17,42 @@ import {
 } from "../components/ui/Table";
 import { 
   getApplicationRisk, 
-  formatRelativeTime
+  formatRelativeTime,
+  formatApplicationAge
 } from "../utils/formatters";
 import { 
   Search, 
   UserCheck, 
   CheckCircle2, 
   ArrowUpRight,
-  Layers
+  Layers,
+  Sparkles
 } from "lucide-react";
 
 export default function Applications() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [simulating, setSimulating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   
   const [claimTargetApp, setClaimTargetApp] = useState<Application | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | "">(""  );
   const [actionLoading, setActionLoading] = useState(false);
+
+  const handleSimulate = async () => {
+    setSimulating(true);
+    try {
+      await simulateInflow(3, true);
+      window.dispatchEvent(new CustomEvent('workflow-run-completed'));
+      await loadData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSimulating(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -134,6 +150,17 @@ export default function Applications() {
           <p className="text-sm text-slate-500 mt-0.5">
             View and manage all loan applications in the system.
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSimulate}
+            loading={simulating}
+            icon={<Sparkles className="w-3.5 h-3.5 text-indigo-600" />}
+          >
+            Simulate Inflow (Demo)
+          </Button>
         </div>
       </div>
 
@@ -249,10 +276,10 @@ export default function Applications() {
                     {/* Age */}
                     <TableCell>
                       <div className="text-xs text-slate-700 font-medium">
-                        {formatRelativeTime(app.created_at)}
+                        {formatApplicationAge(app.created_at)} old
                       </div>
                       <div className="text-[11px] text-slate-400">
-                        {app.status === "COMPLETED" ? "Resolved" : "In progress"}
+                        {app.status === "COMPLETED" ? "Resolved" : formatRelativeTime(app.created_at)}
                       </div>
                     </TableCell>
 
@@ -265,7 +292,9 @@ export default function Applications() {
                             variant="primary"
                             onClick={() => {
                               setClaimTargetApp(app);
-                              if (users.length > 0) setSelectedUserId(users[0].id);
+                              const claimable = users.filter((u) => u.role === "Processor" || u.role === "Underwriter");
+                              if (claimable.length > 0) setSelectedUserId(claimable[0].id);
+                              else if (users.length > 0) setSelectedUserId(users[0].id);
                             }}
                             icon={<UserCheck className="w-3 h-3" />}
                           >
@@ -327,11 +356,13 @@ export default function Applications() {
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} — {u.role}
-                </option>
-              ))}
+              {users
+                .filter((u) => u.role === "Processor" || u.role === "Underwriter")
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} — {u.role}
+                  </option>
+                ))}
             </select>
           </div>
         </div>

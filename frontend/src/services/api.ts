@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Application, Task, User, AnalyticsSummary, ApplicationEvent } from '../types';
+import type { Application, Task, User, AnalyticsSummary, ApplicationEvent, WorkflowRunResponse } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -18,6 +18,11 @@ export const completeTask = (id: number) => api.post<Task>(`/tasks/${id}/complet
 
 export const getUsers = () => api.get<User[]>('/users').then(res => res.data);
 
-export const runWorkflow = () => api.post('/workflow/run').then(res => res.data);
-export const getAnalyticsSummary = () => api.get<AnalyticsSummary>('/analytics/summary').then(res => res.data);
+export const runWorkflow = () => api.post<WorkflowRunResponse>('/workflow/run').then(res => res.data);
+export const simulateInflow = (count: number = 3, runWorkflow: boolean = true) => 
+  api.post<{ cases_created: number; application_numbers: string[]; workflow_stats: WorkflowRunResponse }>(
+    `/demo/simulate-inflow?count=${count}&run_workflow=${runWorkflow}`
+  ).then(res => res.data);
 
+export const resetAndSeed = () => api.post('/demo/reset-and-seed').then(res => res.data);
+export const getAnalyticsSummary = () => api.get<AnalyticsSummary>('/analytics/summary').then(res => res.data);
