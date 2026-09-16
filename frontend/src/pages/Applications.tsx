@@ -1,54 +1,84 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { 
-  useApplications, 
-  useUsers, 
-  useClaimApplication, 
-  useCompleteApplication, 
-  useSimulateInflow 
+import {
+  useApplications,
+  useUsers,
+  useClaimApplication,
+  useCompleteApplication,
+  useSimulateInflow,
 } from "../hooks/useWorkflowQueries";
+import { useUserScope } from "../hooks/useUserScope";
 import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
 import { Modal } from "../components/ui/Modal";
 import { Card } from "../components/ui/Card";
-import { 
-  Table, 
-  TableHeader, 
-  TableBody, 
-  TableRow, 
-  TableHead, 
-  TableCell 
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
 } from "../components/ui/Table";
-import { 
-  getApplicationRisk, 
+import {
+  getApplicationRisk,
   formatRelativeTime,
-  formatApplicationAge
+  formatApplicationAge,
 } from "../utils/formatters";
-import { 
-  Search, 
-  UserCheck, 
-  CheckCircle2, 
+import {
+  Search,
+  UserCheck,
+  CheckCircle2,
   ArrowUpRight,
   Layers,
-  Sparkles
+  Sparkles,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Tab configuration per role
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tab key → application filter function
+ *
+ * Admin:    "all" (global) | "unclaimed" | "in_progress" | "overdue" | "completed"
+ * Manager:  "my_team" (team apps) | "unclaimed" | "overdue" | "all" | "completed"
+ * Officer:  "my_cases" (only currentUser's) | "all" | "completed"
+ *
+ * This ensures Officers cannot accidentally see each other's cases in the
+ * primary view without explicitly switching to "All Applications".
+ */
+
+type TabKey = "my_cases" | "my_team" | "all" | "unclaimed" | "in_progress" | "overdue" | "completed";
+
+interface TabDef {
+  key: TabKey;
+  label: string;
+  activeColor: string;
+}
+
 export default function Applications() {
   const { currentUser, currentRole } = useRole();
+  const scope = useUserScope();
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (currentRole === "Claimed Officer") return "my_cases";
+    if (currentRole === "Manager") return "my_team";
+    return "all";
+  });
+
   const [claimTargetApp, setClaimTargetApp] = useState<Application | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | "">("");
 
-  // Cached server-state queries
+  // Server-state (global, cached)
   const { data: applications = [], isLoading: loadingApps } = useApplications();
   const { data: users = [], isLoading: loadingUsers } = useUsers();
 
-  // Targeted mutations
+  // Mutations
   const claimMutation = useClaimApplication();
   const completeMutation = useCompleteApplication();
   const simulateMutation = useSimulateInflow();
@@ -84,57 +114,94 @@ export default function Applications() {
     }
   };
 
-  const filteredApps = applications.filter((app) => {
-    const matchesSearch = app.application_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (app.claimed_by?.name || "").toLowerCase().includes(searchQuery.toLowerCase());
+  // ── Tab definitions + counts ─────────────────────────────────────────────
+  const overdueCounts = applications.filter((a) => {
+    const r = getApplicationRisk(a);
+    return r.level === "escalated" || r.level === "at_risk";
+  }).length;
 
-    const risk = getApplicationRisk(app);
-    let matchesStatus = true;
-    if (statusFilter === "MY_CASES") {
-      matchesStatus = app.claimed_by_user_id === currentUser.id;
-    } else if (statusFilter === "UNCLAIMED") {
-      matchesStatus = app.status === "OPEN" && !app.claimed_by_user_id;
-    } else if (statusFilter === "IN_PROGRESS") {
-      matchesStatus = app.status === "CLAIMED";
-    } else if (statusFilter === "OVERDUE") {
-      matchesStatus = risk.level === "escalated" || risk.level === "at_risk";
-    } else if (statusFilter === "COMPLETED") {
-      matchesStatus = app.status === "COMPLETED";
+  const tabs: TabDef[] = (() => {
+    if (currentRole === "Claimed Officer") {
+      return [
+        { key: "my_cases", label: `My Cases (${scope.myApplications.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
+        { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+      ];
     }
+    if (currentRole === "Manager") {
+      return [
+        { key: "my_team", label: `My Team (${scope.teamApplications.length})`, activeColor: "bg-blue-600 text-white" },
+        { key: "unclaimed", label: `Unclaimed (${scope.unclaimedApplications.length})`, activeColor: "bg-amber-600 text-white" },
+        { key: "overdue", label: `Overdue (${overdueCounts})`, activeColor: "bg-rose-600 text-white" },
+        { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
+        { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+      ];
+    }
+    // Admin
+    return [
+      { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
+      { key: "unclaimed", label: `Unassigned (${scope.unclaimedApplications.length})`, activeColor: "bg-amber-600 text-white" },
+      { key: "in_progress", label: `In Progress (${applications.filter((a) => a.status === "CLAIMED").length})`, activeColor: "bg-indigo-600 text-white" },
+      { key: "overdue", label: `Overdue (${overdueCounts})`, activeColor: "bg-rose-600 text-white" },
+      { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+    ];
+  })();
 
-    return matchesSearch && matchesStatus;
+  // ── Filter applications by active tab ────────────────────────────────────
+  const tabBaseSet = (() => {
+    switch (activeTab) {
+      case "my_cases":
+        return scope.myApplications;
+      case "my_team":
+        return scope.teamApplications;
+      case "unclaimed":
+        return scope.unclaimedApplications;
+      case "in_progress":
+        return applications.filter((a) => a.status === "CLAIMED");
+      case "overdue":
+        return applications.filter((a) => {
+          const r = getApplicationRisk(a);
+          return r.level === "escalated" || r.level === "at_risk";
+        });
+      case "completed":
+        return applications.filter((a) => a.status === "COMPLETED");
+      case "all":
+      default:
+        return applications;
+    }
+  })();
+
+  const filteredApps = tabBaseSet.filter((app) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      app.application_number.toLowerCase().includes(q) ||
+      (app.claimed_by?.name ?? "").toLowerCase().includes(q)
+    );
   });
 
-  const counts = {
-    all: applications.length,
-    myCases: applications.filter(a => a.claimed_by_user_id === currentUser.id).length,
-    unclaimed: applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id).length,
-    inProgress: applications.filter(a => a.status === "CLAIMED").length,
-    overdue: applications.filter(a => {
-      const r = getApplicationRisk(a);
-      return r.level === "escalated" || r.level === "at_risk";
-    }).length,
-    completed: applications.filter(a => a.status === "COMPLETED").length,
-  };
+  // ── Header copy ──────────────────────────────────────────────────────────
+  const pageTitle =
+    currentRole === "Claimed Officer"
+      ? `${currentUser.name.split(" ")[0]}'s Cases`
+      : currentRole === "Manager"
+      ? "Case Pipeline"
+      : "All Applications";
 
-  const tabs = [
-    { key: "ALL", label: `All (${counts.all})`, activeColor: "bg-slate-900 text-white" },
-    ...(currentRole === "Claimed Officer" ? [{ key: "MY_CASES", label: `My Claimed (${counts.myCases})`, activeColor: "bg-emerald-600 text-white" }] : []),
-    { key: "UNCLAIMED", label: `Unclaimed (${counts.unclaimed})`, activeColor: "bg-amber-600 text-white" },
-    { key: "IN_PROGRESS", label: `In Progress (${counts.inProgress})`, activeColor: "bg-indigo-600 text-white" },
-    { key: "OVERDUE", label: `Overdue (${counts.overdue})`, activeColor: "bg-rose-600 text-white" },
-    { key: "COMPLETED", label: `Completed (${counts.completed})`, activeColor: "bg-emerald-600 text-white" },
-  ];
+  const pageSubtitle =
+    currentRole === "Claimed Officer"
+      ? `Manage your claimed applications. Switch to "All Applications" for full pipeline view.`
+      : currentRole === "Manager"
+      ? `Monitor your team's cases and the overall application pipeline.`
+      : "View and manage all loan applications across the system.";
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Applications</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            View and manage all loan applications in the system.
-          </p>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{pageTitle}</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{pageSubtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -149,15 +216,31 @@ export default function Applications() {
         </div>
       </div>
 
+      {/* Officer scope note */}
+      {currentRole === "Claimed Officer" && activeTab === "my_cases" && (
+        <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+          Showing cases claimed by <strong>{currentUser.name}</strong> only.
+        </div>
+      )}
+
+      {/* Manager scope note */}
+      {currentRole === "Manager" && activeTab === "my_team" && (
+        <div className="px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2">
+          <UserCheck className="w-3.5 h-3.5 shrink-0" />
+          Showing cases owned by your direct reports ({scope.teamMembers.map((m) => m.name).join(", ") || "none"}).
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-          {tabs.map(tab => (
+          {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setStatusFilter(tab.key)}
+              onClick={() => setActiveTab(tab.key)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                statusFilter === tab.key ? tab.activeColor : "text-slate-600 hover:bg-slate-100"
+                activeTab === tab.key ? tab.activeColor : "text-slate-600 hover:bg-slate-100"
               }`}
             >
               {tab.label}
@@ -181,14 +264,22 @@ export default function Applications() {
       <Card>
         {loading ? (
           <div className="p-6 space-y-3">
-            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-14 w-full" />)}
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
           </div>
         ) : filteredApps.length === 0 ? (
           <div className="py-16 text-center space-y-2">
             <Layers className="w-10 h-10 text-slate-300 mx-auto" />
             <div className="text-sm font-semibold text-slate-700">No applications found</div>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Try changing your filter or search query.
+              {searchQuery
+                ? "Try changing your search query."
+                : activeTab === "my_cases"
+                ? "You haven't claimed any applications yet. Go to All Applications to claim one."
+                : activeTab === "my_team"
+                ? "None of your direct reports have claimed applications yet."
+                : "Try changing the active tab filter."}
             </p>
           </div>
         ) : (
@@ -205,13 +296,16 @@ export default function Applications() {
             <TableBody>
               {filteredApps.map((app) => {
                 const risk = getApplicationRisk(app);
-                const openAppTasks = (app.tasks || []).filter(t => t.status === "OPEN");
-                const hasEscalation = openAppTasks.some(t => t.task_type === "ESCALATION");
+                const hasEscalation = (app.tasks || []).some(
+                  (t) => t.status === "OPEN" && t.task_type === "ESCALATION"
+                );
 
                 return (
                   <TableRow
                     key={app.id}
-                    className={`hover:bg-slate-50 transition-colors ${hasEscalation ? "border-l-4 border-l-rose-400" : ""}`}
+                    className={`hover:bg-slate-50 transition-colors ${
+                      hasEscalation ? "border-l-4 border-l-rose-400" : ""
+                    }`}
                   >
                     {/* Application */}
                     <TableCell>
@@ -223,7 +317,7 @@ export default function Applications() {
                         <ArrowUpRight className="w-3 h-3 text-slate-400" />
                       </Link>
                       <div className="text-[11px] text-slate-500 mt-0.5">
-                        {app.current_stage || "Intake"}
+                        {app.current_stage ?? "Intake"}
                       </div>
                     </TableCell>
 
@@ -232,9 +326,11 @@ export default function Applications() {
                       <div className="space-y-1">
                         <Badge
                           variant={
-                            app.status === "COMPLETED" ? "success" :
-                            app.status === "CLAIMED" ? "info" :
-                            "warning"
+                            app.status === "COMPLETED"
+                              ? "success"
+                              : app.status === "CLAIMED"
+                              ? "info"
+                              : "warning"
                           }
                           dot
                         >
@@ -242,7 +338,8 @@ export default function Applications() {
                         </Badge>
                         {app.status !== "COMPLETED" && (
                           <div className="text-[11px] text-slate-500">
-                            Risk: <span className="font-medium text-slate-700">{risk.label}</span>
+                            Risk:{" "}
+                            <span className="font-medium text-slate-700">{risk.label}</span>
                           </div>
                         )}
                       </div>
@@ -256,8 +353,12 @@ export default function Applications() {
                             {app.claimed_by.name.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div className="text-xs font-medium text-slate-900">{app.claimed_by.name}</div>
-                            <div className="text-[10px] text-slate-500">{app.claimed_by.role}</div>
+                            <div className="text-xs font-medium text-slate-900">
+                              {app.claimed_by.name}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {app.claimed_by.role}
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -273,7 +374,9 @@ export default function Applications() {
                         {formatApplicationAge(app.created_at)} old
                       </div>
                       <div className="text-[11px] text-slate-400">
-                        {app.status === "COMPLETED" ? "Resolved" : formatRelativeTime(app.created_at)}
+                        {app.status === "COMPLETED"
+                          ? "Resolved"
+                          : formatRelativeTime(app.created_at)}
                       </div>
                     </TableCell>
 
@@ -297,7 +400,7 @@ export default function Applications() {
                             }}
                             icon={<UserCheck className="w-3 h-3" />}
                           >
-                            {currentRole === "Claimed Officer" ? "Claim Case" : "Assign"}
+                            {currentRole === "Claimed Officer" ? "Claim" : "Assign"}
                           </Button>
                         )}
                         {app.status === "CLAIMED" && (
@@ -311,7 +414,9 @@ export default function Applications() {
                           </Button>
                         )}
                         <Link to={`/applications/${app.id}`}>
-                          <Button size="xs" variant="ghost">View</Button>
+                          <Button size="xs" variant="ghost">
+                            View
+                          </Button>
                         </Link>
                       </div>
                     </TableCell>
@@ -328,7 +433,7 @@ export default function Applications() {
         isOpen={!!claimTargetApp}
         onClose={() => setClaimTargetApp(null)}
         title="Assign Case to Claimed Officer"
-        description={`Assign ${claimTargetApp?.application_number} to a Claimed Officer. The review SLA timer will begin immediately.`}
+        description={`Assign ${claimTargetApp?.application_number} to a Claimed Officer. The review SLA timer begins immediately.`}
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setClaimTargetApp(null)}>
@@ -355,8 +460,8 @@ export default function Applications() {
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              {(users.filter((u) => u.role === "Claimed Officer").length > 0 
-                ? users.filter((u) => u.role === "Claimed Officer") 
+              {(users.filter((u) => u.role === "Claimed Officer").length > 0
+                ? users.filter((u) => u.role === "Claimed Officer")
                 : users
               ).map((u) => (
                 <option key={u.id} value={u.id}>

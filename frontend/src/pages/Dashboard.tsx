@@ -1,392 +1,621 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useApplications, useTasks, useAnalyticsSummary } from "../hooks/useWorkflowQueries";
+import { useUserScope } from "../hooks/useUserScope";
+import { useAnalyticsSummary } from "../hooks/useWorkflowQueries";
+import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
 import { WorkflowRunModal } from "../components/WorkflowRunModal";
-import { 
-  getApplicationRisk, 
-  formatHoursToDaysAndHours,
-  formatApplicationAge
-} from "../utils/formatters";
-import { 
-  AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
-  Play, 
-  ArrowUpRight, 
-  InboxIcon, 
+import { getApplicationRisk, formatApplicationAge, formatRelativeTime } from "../utils/formatters";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ArrowUpRight,
+  InboxIcon,
   ChevronRight,
   UserCheck,
   Shield,
-  Briefcase
+  Briefcase,
+  BarChart3,
+  Users,
+  Zap,
+  TrendingUp,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
 
-export default function Dashboard() {
-  const { currentUser, currentRole, allUsers } = useRole();
+// ──────────────────────────────────────────────────────────────────────────────
+// Sub-components
+// ──────────────────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  label,
+  value,
+  sub,
+  accent = "slate",
+}: {
+  label: string;
+  value: number | string;
+  sub?: string;
+  accent?: "slate" | "indigo" | "rose" | "emerald" | "amber";
+}) {
+  const colors = {
+    slate: "text-slate-900",
+    indigo: "text-indigo-600",
+    rose: "text-rose-600",
+    emerald: "text-emerald-600",
+    amber: "text-amber-600",
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
+      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</div>
+      <div className={`text-3xl font-bold ${colors[accent]}`}>{value}</div>
+      {sub && <div className="text-xs text-slate-400">{sub}</div>}
+    </div>
+  );
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">{children}</h3>
+  );
+}
+
+function ApplicationRow({ app }: { app: Application }) {
+  const risk = getApplicationRisk(app);
+  const hasEscalation = (app.tasks || []).some((t) => t.status === "OPEN" && t.task_type === "ESCALATION");
+  return (
+    <Link
+      to={`/applications/${app.id}`}
+      className="flex items-center justify-between py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200 group"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        {hasEscalation && <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0 animate-pulse" />}
+        <div className="min-w-0">
+          <div className="font-mono text-sm font-bold text-indigo-600 group-hover:text-indigo-800">
+            {app.application_number}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+            {app.claimed_by?.name ?? "Unassigned"} · {formatApplicationAge(app.created_at)} old
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <Badge
+          variant={
+            risk.level === "escalated"
+              ? "error"
+              : risk.level === "at_risk"
+              ? "warning"
+              : risk.level === "attention"
+              ? "orange"
+              : risk.level === "completed"
+              ? "success"
+              : "info"
+          }
+          size="sm"
+        >
+          {risk.label}
+        </Badge>
+        <ArrowUpRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500" />
+      </div>
+    </Link>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin Dashboard — Global Command Center
+// ──────────────────────────────────────────────────────────────────────────────
+
+function AdminDashboard() {
+  const { currentUser } = useRole();
+  const scope = useUserScope();
+  const { data: summary } = useAnalyticsSummary({ enabled: true });
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
 
-  // Cached server-state queries
-  const { data: applications = [], isLoading: loadingApps } = useApplications();
-  const { data: tasks = [], isLoading: loadingTasks } = useTasks();
-  // STRICT REQUIREMENT: Only fetch analytics summary if currentRole is Admin
-  const { data: summary = null } = useAnalyticsSummary({ enabled: currentRole === "Admin" });
+  const inProgress = scope.allApplications.filter((a) => a.status === "CLAIMED").length;
+  const completedCount = scope.allApplications.filter((a) => a.status === "COMPLETED").length;
+  const completionRate =
+    scope.allApplications.length > 0
+      ? Math.round((completedCount / scope.allApplications.length) * 100)
+      : 0;
+  const escalationCount = scope.allOpenTasks.filter((t) => t.task_type === "ESCALATION").length;
 
-  // Only show skeleton on initial load if cache is empty
-  const loading = (loadingApps && applications.length === 0) || (loadingTasks && tasks.length === 0);
+  // Top urgent cases — escalated first, then at-risk, then attention
+  const urgentCases = [...scope.allOverdueApplications]
+    .sort((a, b) => {
+      const order = { escalated: 3, at_risk: 2, attention: 1, normal: 0, completed: -1 };
+      return order[getApplicationRisk(b).level] - order[getApplicationRisk(a).level];
+    })
+    .slice(0, 5);
 
-  if (loading) {
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 shrink-0 mt-0.5">
+            <Shield className="w-5 h-5 text-purple-600" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                {currentUser.name.split(" ")[0]}'s Command Center
+              </h2>
+              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">
+                Admin
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Global pipeline overview — {scope.allApplications.length} applications tracked.
+            </p>
+          </div>
+        </div>
+        <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5" />} onClick={() => setIsRunModalOpen(true)}>
+          Run Engine Scan
+        </Button>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label="Total Cases" value={scope.allApplications.length} sub="In the system" />
+        <KpiCard label="Unassigned" value={scope.unclaimedApplications.length} sub="Awaiting officer" accent={scope.unclaimedApplications.length > 0 ? "amber" : "slate"} />
+        <KpiCard label="In Progress" value={inProgress} sub="Under review" accent="indigo" />
+        <KpiCard label="Completion Rate" value={`${completionRate}%`} sub={`${completedCount} finished`} accent={completionRate >= 50 ? "emerald" : "rose"} />
+      </div>
+
+      {/* Needs My Attention */}
+      <div>
+        <SectionHeading>Needs My Attention</SectionHeading>
+        <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+          {/* Unassigned cases */}
+          {scope.adminActionTasks.length > 0 ? (
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                    <InboxIcon className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {scope.adminActionTasks.length} case{scope.adminActionTasks.length > 1 ? "s" : ""} need officer assignment
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Unclaimed for &gt;24 hours — ASSIGNMENT tasks pending
+                    </div>
+                  </div>
+                </div>
+                <Link to="/tasks">
+                  <Button variant="outline" size="xs" icon={<ChevronRight className="w-3 h-3" />}>
+                    View Tasks
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <span className="text-sm text-slate-600">No assignment tasks pending — queue is clear.</span>
+            </div>
+          )}
+
+          {/* Escalations */}
+          {escalationCount > 0 && (
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {escalationCount} active escalation{escalationCount > 1 ? "s" : ""} in the system
+                    </div>
+                    <div className="text-xs text-slate-500">Cases breached the 48h SLA — manager review required</div>
+                  </div>
+                </div>
+                <Link to="/tasks">
+                  <Button variant="danger" size="xs" icon={<ChevronRight className="w-3 h-3" />}>
+                    Review
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Process Intelligence teaser */}
+          <Link to="/analytics" className="p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors rounded-b-2xl">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center">
+                <BarChart3 className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Process Intelligence</div>
+                <div className="text-xs text-slate-500">
+                  {summary
+                    ? `Pipeline: ${summary.bottleneck_stage} stage is the primary bottleneck`
+                    : "Analyze where cases are getting stuck and why"}
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
+          </Link>
+        </div>
+      </div>
+
+      {/* Priority Cases */}
+      {urgentCases.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <SectionHeading>Priority Cases</SectionHeading>
+            <Link to="/applications?filter=OVERDUE" className="text-xs text-indigo-600 hover:underline font-medium">
+              View all →
+            </Link>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {urgentCases.map((app) => (
+              <ApplicationRow key={app.id} app={app} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Unassigned backlog */}
+      {scope.unclaimedApplications.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <SectionHeading>Unassigned Backlog</SectionHeading>
+            <Link to="/applications" className="text-xs text-indigo-600 hover:underline font-medium">
+              View all →
+            </Link>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {scope.unclaimedApplications.slice(0, 4).map((app) => (
+              <ApplicationRow key={app.id} app={app} />
+            ))}
+            {scope.unclaimedApplications.length > 4 && (
+              <div className="px-4 py-3 text-xs text-slate-500 text-center">
+                +{scope.unclaimedApplications.length - 4} more unassigned cases
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <WorkflowRunModal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} />
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Manager Dashboard — Team Oversight
+// ──────────────────────────────────────────────────────────────────────────────
+
+function ManagerDashboard() {
+  const { currentUser } = useRole();
+  const scope = useUserScope();
+  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
+
+  const teamOverdueCount = scope.teamOverdueApplications.length;
+  const allTeamTasks = [...scope.myTasks, ...scope.teamTasks];
+  const teamEscalations = scope.allOpenTasks.filter(
+    (t) => t.task_type === "ESCALATION" && t.assigned_to_user_id === currentUser.id
+  );
+
+  // Per-officer breakdown
+  const officerStats = scope.teamMembers.map((officer) => {
+    const officerApps = scope.allApplications.filter((a) => a.claimed_by_user_id === officer.id);
+    const activeCases = officerApps.filter((a) => a.status === "CLAIMED");
+    const overdueCases = officerApps.filter(
+      (a) => a.status !== "COMPLETED" && getApplicationRisk(a).level !== "normal" && getApplicationRisk(a).level !== "completed"
+    );
+    const officerTasks = scope.allOpenTasks.filter((t) => t.assigned_to_user_id === officer.id);
+    return { officer, activeCases, overdueCases, officerTasks };
+  });
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 shrink-0 mt-0.5">
+            <Briefcase className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                {currentUser.name.split(" ")[0]}'s Dashboard
+              </h2>
+              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">
+                Manager
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {scope.teamMembers.length} direct report{scope.teamMembers.length !== 1 ? "s" : ""} · {scope.teamApplications.length} team cases
+            </p>
+          </div>
+        </div>
+        <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5" />} onClick={() => setIsRunModalOpen(true)}>
+          Run Engine Scan
+        </Button>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label="Team Cases" value={scope.teamApplications.length} sub="Active in pipeline" accent="indigo" />
+        <KpiCard label="Team Overdue" value={teamOverdueCount} sub="Need intervention" accent={teamOverdueCount > 0 ? "rose" : "emerald"} />
+        <KpiCard label="My Escalations" value={teamEscalations.length} sub="Assigned to me" accent={teamEscalations.length > 0 ? "rose" : "slate"} />
+        <KpiCard label="Team Tasks" value={allTeamTasks.length} sub="Open action items" accent={allTeamTasks.length > 0 ? "amber" : "slate"} />
+      </div>
+
+      {/* My Escalations */}
+      {teamEscalations.length > 0 && (
+        <div>
+          <SectionHeading>My Escalations</SectionHeading>
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl divide-y divide-rose-100">
+            {teamEscalations.map((task) => (
+              <div key={task.id} className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 animate-pulse" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-rose-900">
+                      Case #{task.application_id} escalated
+                    </div>
+                    <div className="text-xs text-rose-600">
+                      {task.assigned_to?.name ?? "Officer"} · {formatRelativeTime(task.created_at)}
+                    </div>
+                  </div>
+                </div>
+                <Link to={`/applications/${task.application_id}`}>
+                  <Button variant="danger" size="xs">Review Case</Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Team Officer Overview */}
+      {officerStats.length > 0 && (
+        <div>
+          <SectionHeading>Team Overview</SectionHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {officerStats.map(({ officer, activeCases, overdueCases, officerTasks }) => (
+              <div key={officer.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
+                    {officer.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{officer.name}</div>
+                    <div className="text-[11px] text-slate-500">{officer.role}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-slate-50 rounded-xl p-2.5">
+                    <div className="text-lg font-bold text-slate-900">{activeCases.length}</div>
+                    <div className="text-[10px] text-slate-500">Active</div>
+                  </div>
+                  <div className={`rounded-xl p-2.5 ${overdueCases.length > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+                    <div className={`text-lg font-bold ${overdueCases.length > 0 ? "text-rose-600" : "text-slate-900"}`}>
+                      {overdueCases.length}
+                    </div>
+                    <div className="text-[10px] text-slate-500">Overdue</div>
+                  </div>
+                  <div className={`rounded-xl p-2.5 ${officerTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+                    <div className={`text-lg font-bold ${officerTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
+                      {officerTasks.length}
+                    </div>
+                    <div className="text-[10px] text-slate-500">Tasks</div>
+                  </div>
+                </div>
+                {overdueCases.length > 0 && (
+                  <Link to="/applications" className="block">
+                    <Button variant="outline" size="xs" className="w-full" icon={<ChevronRight className="w-3 h-3" />}>
+                      View Cases
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Team overdue cases */}
+      {scope.teamOverdueApplications.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <SectionHeading>Team Cases Needing Attention</SectionHeading>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {scope.teamOverdueApplications.slice(0, 5).map((app) => (
+              <ApplicationRow key={app.id} app={app} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scope.teamMembers.length === 0 && (
+        <div className="py-12 text-center space-y-2">
+          <Users className="w-10 h-10 text-slate-300 mx-auto" />
+          <p className="text-sm font-medium text-slate-700">No direct reports found</p>
+          <p className="text-xs text-slate-400">Team membership is determined by manager_user_id in the user directory.</p>
+        </div>
+      )}
+
+      <WorkflowRunModal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} />
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Officer Dashboard — Personal Workspace
+// ──────────────────────────────────────────────────────────────────────────────
+
+function OfficerDashboard() {
+  const { currentUser } = useRole();
+  const scope = useUserScope();
+
+  const completedMyCases = scope.allApplications.filter(
+    (a) => a.claimed_by_user_id === currentUser.id && a.status === "COMPLETED"
+  ).length;
+
+  const myActiveCases = scope.myApplications.filter((a) => a.status === "CLAIMED");
+  const followUpTasks = scope.myTasks.filter((t) => t.task_type === "FOLLOW_UP");
+  const myRecentCompletions = scope.allApplications
+    .filter((a) => a.claimed_by_user_id === currentUser.id && a.status === "COMPLETED" && a.completed_at)
+    .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
+    .slice(0, 3);
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 shrink-0 mt-0.5">
+          <UserCheck className="w-5 h-5 text-emerald-600" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {currentUser.name.split(" ")[0]}'s Workspace
+            </h2>
+            <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+              Claimed Officer
+            </span>
+          </div>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Your personal casework · {scope.myApplications.length} cases claimed, {scope.myTasks.length} tasks pending.
+          </p>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label="My Cases" value={scope.myApplications.length} sub="Total claimed" accent="indigo" />
+        <KpiCard label="Active" value={myActiveCases.length} sub="Under review" accent={myActiveCases.length > 0 ? "indigo" : "slate"} />
+        <KpiCard label="Overdue" value={scope.myOverdueApplications.length} sub="Need follow-up" accent={scope.myOverdueApplications.length > 0 ? "rose" : "emerald"} />
+        <KpiCard label="Completed" value={completedMyCases} sub="Cases finished" accent="emerald" />
+      </div>
+
+      {/* Follow-ups needing action */}
+      {followUpTasks.length > 0 && (
+        <div>
+          <SectionHeading>Needs Your Follow-Up</SectionHeading>
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl divide-y divide-amber-100">
+            {followUpTasks.map((task) => (
+              <div key={task.id} className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-amber-900">
+                      Case #{task.application_id} — SLA follow-up required
+                    </div>
+                    <div className="text-xs text-amber-700">
+                      Claimed review has exceeded 24h · {formatRelativeTime(task.created_at)}
+                    </div>
+                  </div>
+                </div>
+                <Link to={`/applications/${task.application_id}`}>
+                  <Button variant="outline" size="xs">Open Case</Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* My Active Cases */}
+      {myActiveCases.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <SectionHeading>My Active Cases</SectionHeading>
+            <Link to="/applications" className="text-xs text-indigo-600 hover:underline font-medium">
+              View all →
+            </Link>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {myActiveCases.slice(0, 5).map((app) => (
+              <ApplicationRow key={app.id} app={app} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {scope.myApplications.length === 0 && scope.myTasks.length === 0 && (
+        <div className="py-14 text-center space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto">
+            <InboxIcon className="w-7 h-7 text-slate-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-700">No active cases</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Go to Case Pipeline to claim available applications.
+            </p>
+          </div>
+          <Link to="/applications">
+            <Button variant="outline" size="sm" icon={<TrendingUp className="w-3.5 h-3.5" />}>
+              Browse Cases
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* Recent completions */}
+      {myRecentCompletions.length > 0 && (
+        <div>
+          <SectionHeading>Recently Completed</SectionHeading>
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {myRecentCompletions.map((app) => (
+              <Link
+                key={app.id}
+                to={`/applications/${app.id}`}
+                className="flex items-center justify-between py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <div>
+                    <div className="font-mono text-sm font-bold text-slate-700">{app.application_number}</div>
+                    <div className="text-[11px] text-slate-400">
+                      Completed {formatRelativeTime(app.completed_at)}
+                    </div>
+                  </div>
+                </div>
+                <ArrowUpRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Main Dashboard — Routes to the right persona view
+// ──────────────────────────────────────────────────────────────────────────────
+
+export default function Dashboard() {
+  const { currentRole } = useRole();
+  const { isLoading } = useUserScope();
+
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-28 w-full rounded-2xl" />
           ))}
         </div>
         <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-40 w-full rounded-2xl" />
       </div>
     );
   }
 
-  // Determine team members reporting to current user (for Manager)
-  const teamOfficerIds = allUsers.filter(u => u.manager_user_id === currentUser.id).map(u => u.id);
-
-  // Global counts
-  const allOpenTasks = tasks.filter(t => t.status === "OPEN");
-  const unclaimedApps = applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id);
-  const inProgressApps = applications.filter(a => a.status === "CLAIMED");
-  const completedApps = applications.filter(a => a.status === "COMPLETED");
-
-  // Filtered views by simulated perspective
-  let displayApps = applications;
-  let relevantTasks = allOpenTasks;
-  let perspectiveTitle = "Supervisory Operations";
-  let perspectiveSubtitle = `Global portfolio monitoring — tracking ${applications.length} applications and all queues.`;
-  let roleIcon = <Shield className="w-5 h-5 text-purple-600" />;
-
-  if (currentRole === "Claimed Officer") {
-    displayApps = applications.filter(a => a.claimed_by_user_id === currentUser.id);
-    relevantTasks = allOpenTasks.filter(t => 
-      t.assigned_to_user_id === currentUser.id || 
-      (t.task_type === "FOLLOW_UP" && applications.find(a => a.id === t.application_id)?.claimed_by_user_id === currentUser.id)
-    );
-    perspectiveTitle = `Officer Workspace (${currentUser.name})`;
-    perspectiveSubtitle = `Active workload: ${displayApps.length} cases claimed by you, with ${relevantTasks.length} pending tasks.`;
-    roleIcon = <UserCheck className="w-5 h-5 text-emerald-600" />;
-  } else if (currentRole === "Manager") {
-    displayApps = applications.filter(a => a.claimed_by_user_id && teamOfficerIds.includes(a.claimed_by_user_id));
-    relevantTasks = allOpenTasks.filter(t => 
-      t.task_type === "ESCALATION" || 
-      (t.assigned_to_user_id && teamOfficerIds.includes(t.assigned_to_user_id)) ||
-      t.assigned_to_user_id === currentUser.id
-    );
-    perspectiveTitle = `Manager Dashboard (${currentUser.name})`;
-    perspectiveSubtitle = `Team oversight: monitoring ${teamOfficerIds.length} direct report officers and active escalations.`;
-    roleIcon = <Briefcase className="w-5 h-5 text-blue-600" />;
-  }
-
-  // Urgent / Overdue cases in scope
-  const targetAppsForUrgent = currentRole === "Admin" ? applications : displayApps;
-  const urgentApps = targetAppsForUrgent
-    .filter(app => app.status !== "COMPLETED")
-    .map(app => ({ app, risk: getApplicationRisk(app) }))
-    .filter(item => item.risk.level === "escalated" || item.risk.level === "at_risk" || item.risk.level === "attention")
-    .sort((a, b) => {
-      const order = { escalated: 3, at_risk: 2, attention: 1, normal: 0, completed: -1 };
-      return order[b.risk.level] - order[a.risk.level];
-    });
-
-  const escalationTasks = relevantTasks.filter(t => t.task_type === "ESCALATION");
-  const followUpTasks = relevantTasks.filter(t => t.task_type === "FOLLOW_UP");
-  const assignmentTasks = relevantTasks.filter(t => t.task_type === "ASSIGNMENT");
-
-  const processingHours = summary ? Number(summary.avg_processing_time_hours.toFixed(1)) : 0;
-  const waitingHours = summary ? Number(summary.avg_waiting_time_hours.toFixed(1)) : 0;
-  const totalTime = processingHours + waitingHours;
-  const waitingPercent = totalTime > 0 ? Math.round((waitingHours / totalTime) * 100) : 0;
-
-  return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 shrink-0 mt-0.5">
-            {roleIcon}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{perspectiveTitle}</h2>
-              <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-slate-200/80 text-slate-600 border border-slate-300">
-                {currentRole}
-              </span>
-            </div>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {perspectiveSubtitle}
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="primary"
-          size="md"
-          onClick={() => setIsRunModalOpen(true)}
-          icon={<Play className="w-4 h-4 fill-current" />}
-        >
-          Run Engine
-        </Button>
-      </div>
-
-      {/* 4 Stat Cards based on Perspective */}
-      {currentRole === "Admin" && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">New / Unclaimed</div>
-            <div className="text-3xl font-bold text-amber-600">{unclaimedApps.length}</div>
-            <div className="text-xs text-slate-500">Waiting for officer assignment</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">In Progress</div>
-            <div className="text-3xl font-bold text-indigo-600">{inProgressApps.length}</div>
-            <div className="text-xs text-slate-500">Claimed across all officers</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Overdue Alerts</div>
-            <div className="text-3xl font-bold text-rose-600">{urgentApps.length}</div>
-            <div className="text-xs text-slate-500">{escalationTasks.length} manager escalations</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed</div>
-            <div className="text-3xl font-bold text-emerald-600">{completedApps.length}</div>
-            <div className="text-xs text-slate-500">
-              {applications.length > 0 ? Math.round((completedApps.length / applications.length) * 100) : 0}% completion rate
-            </div>
-          </div>
-        </div>
-      )}
-
-      {currentRole === "Manager" && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Team In-Progress</div>
-            <div className="text-3xl font-bold text-blue-600">
-              {displayApps.filter(a => a.status === "CLAIMED").length}
-            </div>
-            <div className="text-xs text-slate-500">Claimed by your officers</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Team Overdue</div>
-            <div className="text-3xl font-bold text-rose-600">{urgentApps.length}</div>
-            <div className="text-xs text-slate-500">Cases past SLA limits</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Manager Escalations</div>
-            <div className="text-3xl font-bold text-amber-600">{escalationTasks.length}</div>
-            <div className="text-xs text-slate-500">Escalated to your desk</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Team Completed</div>
-            <div className="text-3xl font-bold text-emerald-600">
-              {displayApps.filter(a => a.status === "COMPLETED").length}
-            </div>
-            <div className="text-xs text-slate-500">Finalized by team</div>
-          </div>
-        </div>
-      )}
-
-      {currentRole === "Claimed Officer" && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">My Claimed Cases</div>
-            <div className="text-3xl font-bold text-emerald-600">
-              {displayApps.filter(a => a.status === "CLAIMED").length}
-            </div>
-            <div className="text-xs text-slate-500">Active reviews on your desk</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">My Overdue Cases</div>
-            <div className="text-3xl font-bold text-rose-600">{urgentApps.length}</div>
-            <div className="text-xs text-slate-500">Exceeded standard SLA</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">My Follow-Up Tasks</div>
-            <div className="text-3xl font-bold text-amber-600">{followUpTasks.length}</div>
-            <div className="text-xs text-slate-500">Action items assigned to you</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">My Completed</div>
-            <div className="text-3xl font-bold text-indigo-600">
-              {displayApps.filter(a => a.status === "COMPLETED").length}
-            </div>
-            <div className="text-xs text-slate-500">Cases you resolved</div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Two-Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Left: Overdue / Urgent Cases in Scope */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                {urgentApps.length > 0 ? (
-                  <span className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-500" />
-                    {urgentApps.length} {currentRole === "Claimed Officer" ? "of your cases need" : "cases need"} attention
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    All {currentRole === "Claimed Officer" ? "your" : ""} cases are on track
-                  </span>
-                )}
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {currentRole === "Claimed Officer" 
-                  ? "Your claimed cases that require prompt action" 
-                  : "Cases in scope that have exceeded SLA time limits"}
-              </p>
-            </div>
-            <Link to="/applications" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-              View all <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {urgentApps.length === 0 ? (
-            <div className="py-16 text-center space-y-2">
-              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-              <p className="text-sm font-medium text-slate-700">No overdue cases in your queue</p>
-              <p className="text-xs text-slate-400">All active applications are progressing within SLA targets.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {urgentApps.slice(0, 5).map(({ app, risk }) => (
-                <div key={app.id} className={`px-5 py-4 flex items-center justify-between gap-4 ${risk.level === 'escalated' ? 'bg-rose-50/40' : ''}`}>
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm font-bold text-slate-900">{app.application_number}</span>
-                      <Badge variant={risk.badgeVariant} dot pulse={risk.level === 'escalated'}>
-                        {risk.label}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatApplicationAge(app.created_at)} old
-                      </span>
-                      <span>•</span>
-                      <span>{app.claimed_by?.name || 'Unclaimed'}</span>
-                    </div>
-                  </div>
-                  <Link to={`/applications/${app.id}`}>
-                    <Button variant="outline" size="xs" icon={<ArrowUpRight className="w-3.5 h-3.5" />}>
-                      Open
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Right: Task Summary + Time Split */}
-        <div className="space-y-4">
-          {/* Task Queue Summary */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  {currentRole === "Claimed Officer" ? "My Task Queue" : currentRole === "Manager" ? "Team Tasks & Escalations" : "Operational Task Queue"}
-                </h3>
-                <div className="text-[11px] text-slate-500">
-                  {relevantTasks.length} open items in perspective
-                </div>
-              </div>
-              <Link to="/tasks" className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-                View all <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-            <div className="p-4 space-y-2">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100">
-                <div>
-                  <div className="text-xs font-bold text-rose-900">Manager Escalations</div>
-                  <div className="text-[11px] text-rose-600">Escalated past SLA</div>
-                </div>
-                <span className="text-lg font-bold text-rose-700">{escalationTasks.length}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-100">
-                <div>
-                  <div className="text-xs font-bold text-amber-900">Officer Follow-Ups</div>
-                  <div className="text-[11px] text-amber-600">SLA exceeded by Claimed Officer</div>
-                </div>
-                <span className="text-lg font-bold text-amber-700">{followUpTasks.length}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50 border border-blue-100">
-                <div>
-                  <div className="text-xs font-bold text-blue-900">Intake Assignments</div>
-                  <div className="text-[11px] text-blue-600">Cases waiting for assignment</div>
-                </div>
-                <span className="text-lg font-bold text-blue-700">{assignmentTasks.length}</span>
-              </div>
-              {relevantTasks.length === 0 && (
-                <div className="flex items-center gap-2 text-xs text-slate-500 py-2 justify-center">
-                  <InboxIcon className="w-4 h-4" />
-                  No pending tasks in this view
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Time Split Card (Admin Only) */}
-          {currentRole === "Admin" && summary && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Where is the time going?</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Average per application
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden flex">
-                  <div
-                    style={{ width: `${100 - waitingPercent}%` }}
-                    className="bg-indigo-500 h-full"
-                    title={`Active work: ${processingHours}h`}
-                  />
-                  <div
-                    style={{ width: `${waitingPercent}%` }}
-                    className="bg-amber-400 h-full"
-                    title={`Waiting: ${waitingHours}h`}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
-                    Work ({formatHoursToDaysAndHours(processingHours)})
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                    Waiting ({formatHoursToDaysAndHours(waitingHours)} — {waitingPercent}%)
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 border-t border-slate-100 pt-3">
-                Bottleneck stage: <strong className="text-slate-800">{summary.bottleneck_stage}</strong>
-              </p>
-              <Link to="/analytics" className="block text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-                See full analytics →
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <WorkflowRunModal
-        isOpen={isRunModalOpen}
-        onClose={() => setIsRunModalOpen(false)}
-      />
-    </div>
-  );
+  if (currentRole === "Admin") return <AdminDashboard />;
+  if (currentRole === "Manager") return <ManagerDashboard />;
+  return <OfficerDashboard />;
 }

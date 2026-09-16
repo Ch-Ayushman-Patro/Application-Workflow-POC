@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { WorkflowRunModal } from "./WorkflowRunModal";
 import { useRole } from "../context/RoleContext";
-import { useTasks } from "../hooks/useWorkflowQueries";
+import { useUserScope } from "../hooks/useUserScope";
 
 export default function Layout() {
   const location = useLocation();
@@ -22,20 +22,19 @@ export default function Layout() {
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
 
-  // Cached, reactive tasks query
-  const { data: tasks = [] } = useTasks();
+  // Derived user-scoped tasks from shared server cache
+  const scope = useUserScope();
 
   const openTasksCount = useMemo(() => {
-    const open = tasks.filter(t => t.status === "OPEN");
     if (currentRole === "Admin") {
-      return open.length;
+      return scope.adminActionTasks.length;
     } else if (currentRole === "Claimed Officer") {
-      return open.filter(t => t.assigned_to_user_id === currentUser.id || t.assigned_to_role === "Claimed Officer").length;
+      return scope.myTasks.length;
     } else if (currentRole === "Manager") {
-      return open.filter(t => t.task_type === "ESCALATION" || t.assigned_to_user_id === currentUser.id).length;
+      return scope.myTasks.length + scope.myEscalations.length;
     }
-    return open.length;
-  }, [tasks, currentRole, currentUser.id]);
+    return 0;
+  }, [scope.adminActionTasks.length, scope.myTasks.length, scope.myEscalations.length, currentRole]);
 
   const allNavItems = [
     { 
@@ -175,7 +174,7 @@ export default function Layout() {
         {/* Role Simulation Switcher (DEMO ONLY) */}
         <div className="p-3.5 border-t border-slate-900 bg-slate-950 relative">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Demo Role Switcher</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Simulated User</span>
             <span 
               className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" 
               title="Demo role simulation only. NOT authentication or security."
@@ -199,7 +198,7 @@ export default function Layout() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold text-white truncate">{currentUser.name}</div>
-                  <div className="text-[11px] text-slate-400 truncate">{currentRole}</div>
+                  <div className="text-[11px] text-slate-400 truncate">Role: {currentRole}</div>
                 </div>
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isRoleDropdownOpen ? "rotate-180" : ""}`} />
@@ -208,7 +207,7 @@ export default function Layout() {
             {isRoleDropdownOpen && (
               <div className="absolute bottom-full left-0 right-0 mb-2 p-1.5 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 space-y-1">
                 <div className="px-2 py-1 text-[10px] text-slate-400 font-medium border-b border-slate-800/80 mb-1 flex items-center justify-between">
-                  <span>Switch Persona:</span>
+                  <span>Switch User Persona:</span>
                   <span className="text-[9px] text-slate-500">(Demo only)</span>
                 </div>
                 {allUsers.map((u) => {
@@ -267,12 +266,16 @@ export default function Layout() {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100/90 border border-slate-200 rounded-xl text-xs">
               <span className="text-slate-500 text-[11px] hidden md:inline">Viewing as:</span>
               <span className="font-semibold text-slate-800">{currentUser.name}</span>
+              <span className="text-slate-400 text-[11px] hidden lg:inline">/ Role:</span>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                 currentRole === "Admin" ? "bg-purple-100 text-purple-700 border border-purple-200" :
                 currentRole === "Manager" ? "bg-blue-100 text-blue-700 border border-blue-200" :
                 "bg-emerald-100 text-emerald-700 border border-emerald-200"
               }`}>
                 {currentRole}
+              </span>
+              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80" title="Demo role simulation only — not real authentication">
+                DEMO
               </span>
             </div>
 

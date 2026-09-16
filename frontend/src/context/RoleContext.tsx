@@ -14,6 +14,10 @@ interface RoleContextType {
   currentUser: User;
   currentRole: UserRole;
   allUsers: User[];
+  /** IDs of users whose manager_user_id === currentUser.id */
+  teamMemberIds: number[];
+  /** The User object that currentUser reports to (if any) */
+  myManager: User | undefined;
   setCurrentUser: (user: User) => void;
   switchRoleUser: (userId: number) => void;
   refreshUsers: () => Promise<void>;
@@ -69,14 +73,30 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const currentRole: UserRole = (currentUser.role as UserRole) || "Admin";
 
+  // ── Derived hierarchy ─────────────────────────────────────────────────────
+  const teamMemberIds = useMemo(
+    () => effectiveUsers.filter((u) => u.manager_user_id === currentUser.id).map((u) => u.id),
+    [effectiveUsers, currentUser.id]
+  );
+
+  const myManager = useMemo(
+    () =>
+      currentUser.manager_user_id
+        ? effectiveUsers.find((u) => u.id === currentUser.manager_user_id)
+        : undefined,
+    [effectiveUsers, currentUser.manager_user_id]
+  );
+
   const contextValue = useMemo(() => ({
     currentUser,
     currentRole,
     allUsers: effectiveUsers,
+    teamMemberIds,
+    myManager,
     setCurrentUser: handleSetCurrentUser,
     switchRoleUser,
     refreshUsers,
-  }), [currentUser, currentRole, effectiveUsers, handleSetCurrentUser, switchRoleUser, refreshUsers]);
+  }), [currentUser, currentRole, effectiveUsers, teamMemberIds, myManager, handleSetCurrentUser, switchRoleUser, refreshUsers]);
 
   return (
     <RoleContext.Provider value={contextValue}>
