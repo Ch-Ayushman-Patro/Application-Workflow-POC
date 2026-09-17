@@ -1,19 +1,26 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from app.database import SessionLocal, engine, Base
 from app.models.all import User, Application, Task, ApplicationEvent, ApplicationStatus, UserRole
 from app.workflow.rule_engine import WorkflowEngine
 
+logger = logging.getLogger(__name__)
+
+
 def seed_db():
+    logger.info("seed_db: starting database reset and seed.")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
     # Clear existing data safely respecting PostgreSQL foreign keys
+    logger.info("Clearing existing data (Tasks, Events, Applications, Users).")
     db.query(Task).delete()
     db.query(ApplicationEvent).delete()
     db.query(Application).delete()
     db.query(User).update({User.manager_user_id: None})
     db.query(User).delete()
     db.commit()
+    logger.info("Existing data cleared.")
 
     # Create Users with organizational reporting hierarchy:
     # Admin -> Manager -> Underwriter
@@ -21,22 +28,26 @@ def seed_db():
     db.add(u_admin)
     db.commit()
     db.refresh(u_admin)
+    logger.info("Created user: %s (role=%s, id=%d).", u_admin.name, u_admin.role, u_admin.id)
 
     u_mgr = User(name="Diana Manager", role=UserRole.MANAGER.value, manager_user_id=u_admin.id)
     db.add(u_mgr)
     db.commit()
     db.refresh(u_mgr)
+    logger.info("Created user: %s (role=%s, id=%d).", u_mgr.name, u_mgr.role, u_mgr.id)
 
     u_officer1 = User(name="Bob Underwriter", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
     db.add(u_officer1)
     db.commit()
     db.refresh(u_officer1)
+    logger.info("Created user: %s (role=%s, id=%d).", u_officer1.name, u_officer1.role, u_officer1.id)
 
     u_officer2 = User(name="Charlie Underwriter", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
     db.add(u_officer2)
     db.commit()
     db.refresh(u_officer2)
-    
+    logger.info("Created user: %s (role=%s, id=%d).", u_officer2.name, u_officer2.role, u_officer2.id)
+
     now = datetime.now(timezone.utc)
 
     # 12 Diverse Demo Applications across all states & stages
@@ -164,6 +175,7 @@ def seed_db():
     for app in apps:
         db.add(app)
     db.commit()
+    logger.info("Inserted %d applications into the database.", len(apps))
 
     # Create Timeline Events for all seeded applications
     for app in apps:
@@ -209,16 +221,20 @@ def seed_db():
                     timestamp=app.completed_at,
                     details=f"Application {app.application_number} finalized"
                 ))
-            
+
     db.commit()
+    logger.info("Timeline events seeded for all applications.")
 
     # Run workflow engine so SLA tasks and escalations are pre-populated
+    logger.info("Running WorkflowEngine post-seed to generate tasks and escalations.")
     workflow_engine = WorkflowEngine(db)
     stats = workflow_engine.evaluate_all()
-    
+
     db.close()
+    logger.info("Database seeded successfully with 12 applications. Workflow stats: %s", stats)
     print(f"Database seeded successfully with 12 applications.")
     print(f"Workflow Engine initialized: {stats}")
+
 
 if __name__ == "__main__":
     seed_db()
