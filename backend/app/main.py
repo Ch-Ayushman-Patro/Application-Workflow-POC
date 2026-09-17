@@ -10,7 +10,7 @@ import app.models.all
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Application Workflow POC")
+app = FastAPI(title="Application Workflow")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,5 +34,5 @@ app.include_router(analytics_router, prefix="/api")
 
 @app.get("/")
 def root():
-    return {"message": "Application Workflow POC API is running."}
+    return {"message": "Application Workflow API is running."}
 

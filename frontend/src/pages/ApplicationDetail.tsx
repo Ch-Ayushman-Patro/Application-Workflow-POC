@@ -31,7 +31,6 @@ import {
   Check,
   Calendar,
   AlertTriangle,
-  ArrowRight,
   Info,
   Zap,
   X
@@ -96,14 +95,6 @@ export default function ApplicationDetail() {
       setDecisionModal({ open: false, decision: null });
     } catch (err) {
       console.error("Failed to record application decision", err);
-    }
-  };
-
-  const handleCompleteApp = async () => {
-    try {
-      await completeAppMutation.mutateAsync({ id: appId, actorId: currentUser.id });
-    } catch (err) {
-      console.error("Failed to complete application", err);
     }
   };
 
@@ -178,7 +169,6 @@ export default function ApplicationDetail() {
   // ── User Awareness & Action Permissions ──────────────────────────────────
   const isAdmin = currentRole === "Admin";
   const isAssignedOfficer = application.claimed_by_user_id === currentUser.id;
-  const isEscalationRecipient = escalationTask?.assigned_to_user_id === currentUser.id;
 
   const isApproved = isCompleted && (application.decision === "APPROVED" || application.current_stage === "Approved" || (!application.decision && application.current_stage !== "Rejected"));
   const isRejected = isCompleted && (application.decision === "REJECTED" || application.current_stage === "Rejected");
@@ -327,12 +317,12 @@ export default function ApplicationDetail() {
               )}
               {!isCompleted && currentCaseState === "OVERDUE" && (
                 <Badge variant="warning" size="md" dot pulse>
-                  Review SLA Overdue (&gt;24h)
+                  Review SLA Overdue
                 </Badge>
               )}
               {!isCompleted && currentCaseState === "ESCALATED" && (
                 <Badge variant="error" size="md" dot pulse>
-                  Manager Escalation Active (&gt;48h)
+                  Manager Escalation Active
                 </Badge>
               )}
 
@@ -384,8 +374,8 @@ export default function ApplicationDetail() {
                     </div>
                     <div className="text-[11px] opacity-80 mt-0.5">
                       {isApproved 
-                        ? "Underwriting review finalized with loan approval. Case closed." 
-                        : "Underwriting review finalized with loan rejection. Case closed."}
+                        ? "Underwriting review finalized with loan approval." 
+                        : "Underwriting review finalized with loan rejection."}
                     </div>
                   </div>
                 </div>
