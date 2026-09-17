@@ -29,7 +29,6 @@ import {
 import {
   Search,
   UserCheck,
-  CheckCircle2,
   ArrowUpRight,
   Layers,
 } from "lucide-react";
@@ -91,14 +90,6 @@ export default function Applications() {
       setSelectedUserId("");
     } catch (err) {
       console.error("Failed to claim application", err);
-    }
-  };
-
-  const handleCompleteApp = async (appId: number) => {
-    try {
-      await completeMutation.mutateAsync({ id: appId, actorId: currentUser.id });
-    } catch (err) {
-      console.error("Failed to complete application", err);
     }
   };
 
