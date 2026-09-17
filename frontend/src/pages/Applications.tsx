@@ -193,22 +193,6 @@ export default function Applications() {
         </div>
       </div>
 
-      {/* Underwriter scope note */}
-      {currentRole === "Underwriter" && activeTab === "my_cases" && (
-        <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          Showing Applications claimed by <strong>{currentUser.name}</strong> only.
-        </div>
-      )}
-
-      {/* Manager scope note */}
-      {currentRole === "Manager" && activeTab === "my_team" && (
-        <div className="px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2">
-          <UserCheck className="w-3.5 h-3.5 shrink-0" />
-          Showing Applications owned by your direct reports ({scope.teamMembers.map((m) => m.name).join(", ") || "none"}).
-        </div>
-      )}
-
       {/* Filter Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">

@@ -153,13 +153,7 @@ export default function Layout() {
         {/* Role Simulation Switcher (DEMO ONLY) */}
         <div className="p-3.5 border-t border-slate-900 bg-slate-950 relative">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Simulated User</span>
-            <span 
-              className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" 
-              title="Demo role simulation only. NOT authentication or security."
-            >
-              Demo Sim
-            </span>
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">User</span>
           </div>
 
           <div className="relative">
