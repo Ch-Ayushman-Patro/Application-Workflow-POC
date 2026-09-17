@@ -74,7 +74,7 @@ export default function Layout() {
     if (location.pathname.startsWith("/applications")) return { title: "Application Pipeline", subtitle: "Monitor and triage Applications through lifecycle stages" };
     if (location.pathname.startsWith("/tasks")) return { title: "Operational Inbox", subtitle: "Triage assignments, follow-ups, and escalations" };
     if (location.pathname.startsWith("/analytics")) return { title: "Process Intelligence", subtitle: "Workflow velocity, waiting bottlenecks, and SLA health" };
-    return { title: "Workflow Orchestrator", subtitle: "Application Monitoring POC" };
+    return { title: "Workflow Orchestrator", subtitle: "Application Monitoring" };
   };
 
   const pageMeta = getPageTitle();
@@ -92,7 +92,6 @@ export default function Layout() {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-sm tracking-tight text-white">FlowPulse</span>
-                <span className="text-[10px] uppercase font-semibold tracking-wider bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded">POC</span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium">Workflow Monitoring</p>
             </div>
