@@ -228,11 +228,6 @@ export default function Layout() {
         <header className="h-16 bg-white border-b border-slate-200/80 px-6 sm:px-8 flex items-center justify-between z-10 shrink-0 shadow-2xs">
           <div className="flex items-center gap-3">
             <div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <span>LendFoundry Workflow</span>
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-slate-700 font-medium">{pageMeta.title}</span>
-              </div>
               <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-tight">
                 {pageMeta.title}
               </h1>
