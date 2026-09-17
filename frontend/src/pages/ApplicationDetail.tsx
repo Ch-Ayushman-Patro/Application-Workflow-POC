@@ -1023,7 +1023,6 @@ export default function ApplicationDetail() {
               <strong className={decisionModal.decision === "APPROVED" ? "text-emerald-700" : "text-rose-700"}>
                 {decisionModal.decision === "APPROVED" ? "APPROVED" : "REJECTED"}
               </strong>.
-              All remaining open SLA tasks (follow-ups or escalations) will be automatically closed, and this decision will be permanently recorded in the audit trail.
             </p>
           </div>
 

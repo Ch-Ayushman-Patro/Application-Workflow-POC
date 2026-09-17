@@ -110,7 +110,6 @@ export default function Applications() {
     if (currentRole === "Underwriter") {
       return [
         { key: "my_cases", label: `My Applications (${scope.myApplications.length})`, activeColor: "bg-indigo-600 text-white" },
-        { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
         { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
         { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
       ];
@@ -120,7 +119,6 @@ export default function Applications() {
         { key: "my_team", label: `My Team (${scope.teamApplications.length})`, activeColor: "bg-blue-600 text-white" },
         { key: "unclaimed", label: `Unclaimed (${scope.unclaimedApplications.length})`, activeColor: "bg-amber-600 text-white" },
         { key: "overdue", label: `Overdue (${overdueCounts})`, activeColor: "bg-rose-600 text-white" },
-        { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
         { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
         { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
       ];
