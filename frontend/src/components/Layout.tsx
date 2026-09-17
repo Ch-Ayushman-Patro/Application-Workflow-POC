@@ -41,7 +41,7 @@ export default function Layout() {
       adminOnly: false,
     },
     { 
-      name: "Application Pipeline", 
+      name: "Application", 
       path: "/applications", 
       icon: Layers,
       description: "Lifecycle tracking & Applications",
@@ -71,7 +71,7 @@ export default function Layout() {
   const getPageTitle = () => {
     if (location.pathname === "/") return { title: "Command Center", subtitle: "Live operations & risk monitoring" };
     if (location.pathname.startsWith("/applications/")) return { title: "Application Workspace", subtitle: "Application details & workflow timeline" };
-    if (location.pathname.startsWith("/applications")) return { title: "Application Pipeline", subtitle: "Monitor and triage Applications through lifecycle stages" };
+    if (location.pathname.startsWith("/applications")) return { title: "Application", subtitle: "Monitor and triage Applications through lifecycle stages" };
     if (location.pathname.startsWith("/tasks")) return { title: "Operational Inbox", subtitle: "Triage assignments, follow-ups, and escalations" };
     if (location.pathname.startsWith("/analytics")) return { title: "Process Intelligence", subtitle: "Workflow velocity, waiting bottlenecks, and SLA health" };
     return { title: "Workflow Orchestrator", subtitle: "Application Monitoring" };

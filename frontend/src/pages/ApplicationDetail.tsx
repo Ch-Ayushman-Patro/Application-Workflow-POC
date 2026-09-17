@@ -57,7 +57,7 @@ export default function ApplicationDetail() {
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | "">("");
 
-  // Decision modal state (Milestone 4: Approve / Reject)
+  // Decision modal state (Milestone 3 Decision)
   const [decisionModal, setDecisionModal] = useState<{
     open: boolean;
     decision: "APPROVED" | "REJECTED" | null;
@@ -193,11 +193,11 @@ export default function ApplicationDetail() {
   const canAssignCase = isUnassigned && (isAdmin || currentRole === "Underwriter");
 
   // ── Compact Journey Stepper Model ────────────────────────────────────────
-  // Steps: Intake Ingested -> Underwriter Assignment -> Underwriting Review -> Application Decision
+  // Steps: Claim Intake -> Underwriter Assignment -> Underwriting Review -> Application Decision
   const journeyMilestones = [
     {
       id: "intake",
-      label: "1. Intake Ingested",
+      label: "1. Claim Intake",
       status: "completed" as const,
       timestamp: formatDate(application.created_at),
       detail: "Application received and registered",
@@ -218,33 +218,20 @@ export default function ApplicationDetail() {
         ? ("current" as const) 
         : ("upcoming" as const),
       timestamp: isCompleted 
-        ? `${formatHoursToDaysAndHours(reviewDurationHours)} review time` 
+        ? `${isRejected ? "Rejected" : "Approved"} · ${formatDate(application.completed_at)}` 
         : isClaimed 
         ? `${formatHoursToDaysAndHours(reviewDurationHours)} in review`
         : "Awaiting assignment",
       detail: isCompleted 
-        ? "Review finalized" 
+        ? (isRejected ? `Rejected by ${application.claimed_by?.name || 'Agent'}` : `Approved by ${application.claimed_by?.name || 'Agent'}`)
         : isEscalated 
         ? "Escalated to Manager" 
         : isOverdue 
         ? "Follow-up required (>24h)" 
         : isClaimed 
-        ? "Active review within SLA" 
+        ? "Decision pending" 
         : "Starts once assigned",
-    },
-    {
-      id: "decision",
-      label: "4. Application Decision",
-      status: isCompleted ? ("completed" as const) : isClaimed ? ("current" as const) : ("upcoming" as const),
-      timestamp: isCompleted 
-        ? `${isRejected ? "Rejected" : "Approved"} · ${formatDate(application.completed_at)}` 
-        : isClaimed 
-        ? "Pending Underwriter Decision" 
-        : "Awaiting review completion",
-      detail: isCompleted 
-        ? (isRejected ? "Application rejected" : "Application approved") 
-        : "Approve or Reject",
-    },
+    }
   ];
 
   return (
@@ -256,7 +243,7 @@ export default function ApplicationDetail() {
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to Application Pipeline
+          Back to Application
         </Link>
 
         <div className="flex items-center gap-2 text-xs">
@@ -317,7 +304,7 @@ export default function ApplicationDetail() {
               )}
               {!isCompleted && currentCaseState === "OVERDUE" && (
                 <Badge variant="warning" size="md" dot pulse>
-                  Review SLA Overdue
+                  Review SLA Delayed
                 </Badge>
               )}
               {!isCompleted && currentCaseState === "ESCALATED" && (
@@ -969,7 +956,7 @@ export default function ApplicationDetail() {
         )}
       </Modal>
 
-      {/* Application Decision Confirmation Modal (Milestone 4: Approve / Reject) */}
+      {/* Application Decision Confirmation Modal (Milestone 3 Decision) */}
       <Modal
         isOpen={decisionModal.open}
         onClose={() => setDecisionModal({ open: false, decision: null })}

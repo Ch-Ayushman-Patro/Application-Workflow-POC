@@ -4,7 +4,7 @@ import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
-import { getApplicationRisk, formatApplicationAge, formatRelativeTime } from "../utils/formatters";
+import { getApplicationRisk, formatElapsedTime, formatRelativeTime } from "../utils/formatters";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -72,7 +72,7 @@ function ApplicationRow({ app }: { app: Application }) {
             {app.application_number}
           </div>
           <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-            {app.claimed_by?.name ?? "Unassigned"} · {formatApplicationAge(app.created_at)} old
+            {app.claimed_by?.name ?? "Unassigned"} · {formatElapsedTime(app.created_at)}
           </div>
         </div>
       </div>
@@ -115,7 +115,7 @@ function AdminDashboard() {
       : 0;
 
   // Top urgent Applications — escalated first, then at-risk, then attention
-  const urgentCases = scope.allOverdueApplications.slice(0, 5);
+  const urgentCases = scope.allDelayedApplications.slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -213,7 +213,7 @@ function AdminDashboard() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <SectionHeading>Priority Applications</SectionHeading>
-            <Link to="/applications?filter=OVERDUE" className="text-xs text-indigo-600 hover:underline font-medium">
+            <Link to="/applications?filter=Delayed" className="text-xs text-indigo-600 hover:underline font-medium">
               View all →
             </Link>
           </div>
@@ -237,7 +237,7 @@ function ManagerDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
 
-  const teamOverdueCount = scope.teamOverdueApplications.length;
+  const teamDelayedCount = scope.teamDelayedApplications.length;
   const allTeamTasks = [...scope.myTasks, ...scope.teamTasks];
   const teamEscalations = scope.allOpenTasks.filter(
     (t) => t.task_type === "ESCALATION" && t.assigned_to_user_id === currentUser.id
@@ -247,11 +247,11 @@ function ManagerDashboard() {
   const underwriterStats = scope.teamMembers.map((underwriter) => {
     const underwriterApps = scope.allApplications.filter((a) => a.claimed_by_user_id === underwriter.id);
     const activeCases = underwriterApps.filter((a) => a.status === "CLAIMED");
-    const overdueCases = underwriterApps.filter(
+    const DelayedCases = underwriterApps.filter(
       (a) => a.status !== "COMPLETED" && getApplicationRisk(a).level !== "normal" && getApplicationRisk(a).level !== "completed"
     );
     const underwriterTasks = scope.allOpenTasks.filter((t) => t.assigned_to_user_id === underwriter.id);
-    return { underwriter, activeCases, overdueCases, underwriterTasks };
+    return { underwriter, activeCases, DelayedCases, underwriterTasks };
   });
 
   return (
@@ -281,7 +281,7 @@ function ManagerDashboard() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Team Applications" value={scope.teamApplications.length} sub="Active in pipeline" accent="indigo" />
-        <KpiCard label="Team Overdue" value={teamOverdueCount} sub="Need intervention" accent={teamOverdueCount > 0 ? "rose" : "emerald"} />
+        <KpiCard label="Team Delayed" value={teamDelayedCount} sub="Need intervention" accent={teamDelayedCount > 0 ? "rose" : "emerald"} />
         <KpiCard label="My Escalations" value={teamEscalations.length} sub="Assigned to me" accent={teamEscalations.length > 0 ? "rose" : "slate"} />
         <KpiCard label="Team Tasks" value={allTeamTasks.length} sub="Open action items" accent={allTeamTasks.length > 0 ? "amber" : "slate"} />
       </div>
@@ -318,7 +318,7 @@ function ManagerDashboard() {
         <div>
           <SectionHeading>Team Overview</SectionHeading>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {underwriterStats.map(({ underwriter, activeCases, overdueCases, underwriterTasks }) => (
+            {underwriterStats.map(({ underwriter, activeCases, DelayedCases, underwriterTasks }) => (
               <div key={underwriter.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
@@ -334,11 +334,11 @@ function ManagerDashboard() {
                     <div className="text-lg font-bold text-slate-900">{activeCases.length}</div>
                     <div className="text-[10px] text-slate-500">Active</div>
                   </div>
-                  <div className={`rounded-xl p-2.5 ${overdueCases.length > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-                    <div className={`text-lg font-bold ${overdueCases.length > 0 ? "text-rose-600" : "text-slate-900"}`}>
-                      {overdueCases.length}
+                  <div className={`rounded-xl p-2.5 ${DelayedCases.length > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+                    <div className={`text-lg font-bold ${DelayedCases.length > 0 ? "text-rose-600" : "text-slate-900"}`}>
+                      {DelayedCases.length}
                     </div>
-                    <div className="text-[10px] text-slate-500">Overdue</div>
+                    <div className="text-[10px] text-slate-500">Delayed</div>
                   </div>
                   <div className={`rounded-xl p-2.5 ${underwriterTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
                     <div className={`text-lg font-bold ${underwriterTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
@@ -347,7 +347,7 @@ function ManagerDashboard() {
                     <div className="text-[10px] text-slate-500">Tasks</div>
                   </div>
                 </div>
-                {overdueCases.length > 0 && (
+                {DelayedCases.length > 0 && (
                   <Link to="/applications" className="block">
                     <Button variant="outline" size="xs" className="w-full" icon={<ChevronRight className="w-3 h-3" />}>
                       View Applications
@@ -360,14 +360,14 @@ function ManagerDashboard() {
         </div>
       )}
 
-      {/* Team overdue Applications */}
-      {scope.teamOverdueApplications.length > 0 && (
+      {/* Team Delayed Applications */}
+      {scope.teamDelayedApplications.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <SectionHeading>Team Applications Needing Attention</SectionHeading>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
-            {scope.teamOverdueApplications.slice(0, 5).map((app) => (
+            {scope.teamDelayedApplications.slice(0, 5).map((app) => (
               <ApplicationRow key={app.id} app={app} />
             ))}
           </div>
@@ -431,7 +431,7 @@ function UnderwriterDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="My Applications" value={scope.myApplications.length} sub="Total claimed" accent="indigo" />
         <KpiCard label="Active" value={myActiveCases.length} sub="Under review" accent={myActiveCases.length > 0 ? "indigo" : "slate"} />
-        <KpiCard label="Overdue" value={scope.myOverdueApplications.length} sub="Need follow-up" accent={scope.myOverdueApplications.length > 0 ? "rose" : "emerald"} />
+        <KpiCard label="Delayed" value={scope.myDelayedApplications.length} sub="Need follow-up" accent={scope.myDelayedApplications.length > 0 ? "rose" : "emerald"} />
         <KpiCard label="Completed" value={completedMyCases} sub="Applications finished" accent="emerald" />
       </div>
 
@@ -488,7 +488,7 @@ function UnderwriterDashboard() {
           <div>
             <p className="text-sm font-semibold text-slate-700">No active Applications</p>
             <p className="text-xs text-slate-400 mt-1">
-              Go to Application Pipeline to claim available applications.
+              Go to Application to claim available applications.
             </p>
           </div>
           <Link to="/applications">
