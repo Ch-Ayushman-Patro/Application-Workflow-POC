@@ -1,25 +1,33 @@
+import logging
 import random
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.all import User, Application, ApplicationStatus, ApplicationEvent, UserRole
 from app.workflow.rule_engine import WorkflowEngine
 
+logger = logging.getLogger(__name__)
+
+
 def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True):
     """
     Simulates incoming loan applications with diverse lifecycle states and ages.
     Triggers the workflow engine to evaluate SLA rules and create realistic tasks/escalations.
     """
+    logger.info("generate_random_cases: count=%d run_workflow=%s.", count, run_workflow)
+
     users = db.query(User).all()
     if not users:
+        logger.warning("No users found in database — cannot generate cases.")
         return {"cases_created": 0, "application_numbers": [], "workflow_stats": None}
-    
+
     # Underwriters for case assignment
     operational_users = [u for u in users if u.role == UserRole.UNDERWRITER.value]
     if not operational_users:
+        logger.warning("No underwriter users found; falling back to all users for assignment.")
         operational_users = users
 
     now = datetime.now(timezone.utc)
-    
+
     # Determine the next available application number
     existing_apps = db.query(Application.application_number).all()
     existing_nums = set()
@@ -29,9 +37,10 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 existing_nums.add(int(num.split("-")[1]))
             except (ValueError, IndexError):
                 pass
-    
+
     next_num = max(existing_nums, default=1000) + 1
-    
+    logger.info("Next application number will start at APP-%d.", next_num)
+
     # 5 realistic scenarios:
     # 1. UNCLAIMED_BREACH: sitting open > 24h -> triggers ASSIGNMENT task for Admin
     # 2. FOLLOW_UP_BREACH: claimed > 24h -> triggers FOLLOW_UP task for Underwriter
@@ -39,15 +48,17 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
     # 4. FRESH_OPEN: arrived recently -> healthy unclaimed
     # 5. FRESH_CLAIMED: claimed recently -> healthy in-progress
     scenarios = ["UNCLAIMED_BREACH", "FOLLOW_UP_BREACH", "ESCALATION_BREACH", "FRESH_OPEN", "FRESH_CLAIMED"]
-    
+
     created_cases = []
-    
+
     for i in range(count):
         # Rotate through the most interesting scenarios first
         scenario = scenarios[i % len(scenarios)]
         app_num = f"APP-{next_num}"
         next_num += 1
-        
+
+        logger.info("Creating case %d/%d: scenario=%s app_num=%s.", i + 1, count, scenario, app_num)
+
         if scenario == "UNCLAIMED_BREACH":
             age_days = random.uniform(1.3, 3.0)
             created_at = now - timedelta(days=age_days)
@@ -67,14 +78,14 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 timestamp=created_at,
                 details=f"Application submitted via portal ({age_days:.1f}d ago)"
             ))
-            
+
         elif scenario == "FOLLOW_UP_BREACH":
             claimed_days = random.uniform(1.2, 1.8)
             created_days = claimed_days + random.uniform(0.5, 1.2)
             created_at = now - timedelta(days=created_days)
             claimed_at = now - timedelta(days=claimed_days)
             assignee = random.choice(operational_users)
-            
+
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.CLAIMED,
@@ -89,14 +100,15 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             db.refresh(app)
             db.add(ApplicationEvent(application_id=app.id, event_type="APPLICATION_CREATED", timestamp=created_at))
             db.add(ApplicationEvent(application_id=app.id, event_type="APPLICATION_CLAIMED", actor_id=assignee.id, timestamp=claimed_at, details=f"Claimed by {assignee.name}"))
-            
+            logger.debug("FOLLOW_UP_BREACH: assigned to %s.", assignee.name)
+
         elif scenario == "ESCALATION_BREACH":
             claimed_days = random.uniform(2.3, 4.0)
             created_days = claimed_days + random.uniform(0.8, 1.8)
             created_at = now - timedelta(days=created_days)
             claimed_at = now - timedelta(days=claimed_days)
             assignee = random.choice(operational_users)
-            
+
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.CLAIMED,
@@ -111,7 +123,8 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             db.refresh(app)
             db.add(ApplicationEvent(application_id=app.id, event_type="APPLICATION_CREATED", timestamp=created_at))
             db.add(ApplicationEvent(application_id=app.id, event_type="APPLICATION_CLAIMED", actor_id=assignee.id, timestamp=claimed_at, details=f"Claimed by {assignee.name}"))
-            
+            logger.debug("ESCALATION_BREACH: assigned to %s.", assignee.name)
+
         elif scenario == "FRESH_OPEN":
             created_at = now - timedelta(hours=random.uniform(1.0, 4.5))
             app = Application(
@@ -125,8 +138,8 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             db.commit()
             db.refresh(app)
             db.add(ApplicationEvent(application_id=app.id, event_type="APPLICATION_CREATED", timestamp=created_at, details="Fresh submission received"))
-            
-        else: # FRESH_CLAIMED
+
+        else:  # FRESH_CLAIMED
             created_at = now - timedelta(hours=random.uniform(3.0, 8.0))
             claimed_at = now - timedelta(hours=random.uniform(0.5, 2.0))
             assignee = random.choice(operational_users)
@@ -144,16 +157,20 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             db.refresh(app)
             db.add(ApplicationEvent(application_id=app.id, event_type="APPLICATION_CREATED", timestamp=created_at))
             db.add(ApplicationEvent(application_id=app.id, event_type="APPLICATION_CLAIMED", actor_id=assignee.id, timestamp=claimed_at, details=f"Assigned to {assignee.name}"))
-            
+            logger.debug("FRESH_CLAIMED: assigned to %s.", assignee.name)
+
         created_cases.append(app_num)
-        
+
     db.commit()
-    
+    logger.info("All %d case(s) committed to database: %s.", len(created_cases), created_cases)
+
     workflow_stats = None
     if run_workflow:
+        logger.info("Running WorkflowEngine after inflow simulation.")
         engine = WorkflowEngine(db)
         workflow_stats = engine.evaluate_all()
-        
+        logger.info("WorkflowEngine stats after inflow: %s", workflow_stats)
+
     return {
         "cases_created": len(created_cases),
         "application_numbers": created_cases,

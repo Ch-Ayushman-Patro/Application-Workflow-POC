@@ -1,51 +1,61 @@
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.all import Application, Task, ApplicationStatus, TaskType, ApplicationEvent
 from datetime import datetime, timezone
 
+logger = logging.getLogger(__name__)
+
+
 def calculate_summary(db: Session):
+    logger.info("Calculating analytics summary.")
     apps = db.query(Application).all()
     tasks = db.query(Task).all()
-    
+
     total = len(apps)
     open_apps = sum(1 for a in apps if a.status == ApplicationStatus.OPEN)
     claimed = sum(1 for a in apps if a.status == ApplicationStatus.CLAIMED)
     completed = sum(1 for a in apps if a.status == ApplicationStatus.COMPLETED)
     approved_apps = sum(1 for a in apps if a.decision == "APPROVED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "APPROVED"))
     rejected_apps = sum(1 for a in apps if a.decision == "REJECTED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "REJECTED"))
-    
+
     pending_action = len([t for t in tasks if t.status == "OPEN"])
     total_escalations = sum(1 for t in tasks if t.task_type == TaskType.ESCALATION)
-    
+
+    logger.info(
+        "Counts — total=%d open=%d claimed=%d completed=%d approved=%d rejected=%d pending_action=%d escalations=%d.",
+        total, open_apps, claimed, completed, approved_apps, rejected_apps, pending_action, total_escalations
+    )
+
     total_human_processing = 0
     total_waiting = 0
     completed_apps_count = 0
-    
+
     now = datetime.now(timezone.utc)
-    
+
     stage_waiting = {}
-    
+
     for app in apps:
         app_created = app.created_at
         if app_created.tzinfo is None:
             app_created = app_created.replace(tzinfo=timezone.utc)
-            
+
         if app.status == ApplicationStatus.COMPLETED:
             completed_apps_count += 1
             app_completed = app.completed_at
             if app_completed.tzinfo is None:
                 app_completed = app_completed.replace(tzinfo=timezone.utc)
-            
+
             if app.claimed_at:
                 app_claimed = app.claimed_at
                 if app_claimed.tzinfo is None:
                     app_claimed = app_claimed.replace(tzinfo=timezone.utc)
-                
+
                 waiting = (app_claimed - app_created).total_seconds()
                 processing = (app_completed - app_claimed).total_seconds()
                 total_waiting += waiting
                 total_human_processing += processing
-                
+
                 stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
             else:
                 waiting = (app_completed - app_created).total_seconds()
@@ -66,16 +76,21 @@ def calculate_summary(db: Session):
                 processing = (now - app_claimed).total_seconds()
                 total_waiting += waiting
                 total_human_processing += processing
-                
+
                 stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
 
     avg_processing = (total_human_processing / total) / 3600.0 if total > 0 else 0
     avg_waiting = (total_waiting / total) / 3600.0 if total > 0 else 0
-    
+
     bottleneck_stage = "None"
     if stage_waiting:
         bottleneck_stage = max(stage_waiting, key=stage_waiting.get)
-        
+
+    logger.info(
+        "Summary computed — avg_processing=%.2fh avg_waiting=%.2fh bottleneck='%s'.",
+        avg_processing, avg_waiting, bottleneck_stage
+    )
+
     return {
         "total_applications": total,
         "open_applications": open_apps,
@@ -89,4 +104,3 @@ def calculate_summary(db: Session):
         "total_escalations": total_escalations,
         "bottleneck_stage": bottleneck_stage
     }
-
