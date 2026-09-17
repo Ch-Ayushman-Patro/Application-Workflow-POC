@@ -113,7 +113,6 @@ function AdminDashboard() {
     scope.allApplications.length > 0
       ? Math.round((completedCount / scope.allApplications.length) * 100)
       : 0;
-  const escalationCount = scope.allOpenTasks.filter((t) => t.task_type === "ESCALATION").length;
 
   // Top urgent Applications — escalated first, then at-risk, then attention
   const urgentCases = scope.allOverdueApplications.slice(0, 5);
@@ -184,49 +183,8 @@ function AdminDashboard() {
               <span className="text-sm text-slate-600">No assignment tasks pending - queue is clear.</span>
             </div>
           )}
-
-          {/* Escalations */}
-          {escalationCount > 0 && (
-            <div className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center">
-                    <AlertTriangle className="w-4 h-4 text-rose-600" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {escalationCount} active escalation{escalationCount > 1 ? "s" : ""} in the system
-                    </div>
-                    <div className="text-xs text-slate-500">Applications breached the 48h SLA - manager review required</div>
-                  </div>
-                </div>
-                <Link to="/tasks">
-                  <Button variant="danger" size="xs" icon={<ChevronRight className="w-3 h-3" />}>
-                    Review
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Priority Applications */}
-      {urgentCases.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <SectionHeading>Priority Applications</SectionHeading>
-            <Link to="/applications?filter=OVERDUE" className="text-xs text-indigo-600 hover:underline font-medium">
-              View all →
-            </Link>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
-            {urgentCases.map((app) => (
-              <ApplicationRow key={app.id} app={app} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Unassigned backlog */}
       {scope.unclaimedApplications.length > 0 && (
@@ -246,6 +204,23 @@ function AdminDashboard() {
                 +{scope.unclaimedApplications.length - 4} more unassigned Applications
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Priority Applications */}
+      {urgentCases.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <SectionHeading>Priority Applications</SectionHeading>
+            <Link to="/applications?filter=OVERDUE" className="text-xs text-indigo-600 hover:underline font-medium">
+              View all →
+            </Link>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+            {urgentCases.map((app) => (
+              <ApplicationRow key={app.id} app={app} />
+            ))}
           </div>
         </div>
       )}
