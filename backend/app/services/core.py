@@ -26,7 +26,7 @@ def claim_application(db: Session, app_id: int, user_id: int):
     app.status = ApplicationStatus.CLAIMED
     app.claimed_by_user_id = user_id
     app.claimed_at = datetime.now(timezone.utc)
-    app.current_stage = "Claimed Officer Review"
+    app.current_stage = "Underwriting Review"
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         app.current_role = user.role

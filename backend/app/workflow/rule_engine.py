@@ -41,7 +41,7 @@ class WorkflowEngine:
                 
                 # Rule 2: CLAIMED + duration > 1 day -> FOLLOW_UP task for claimed user
                 if duration_days > 1.0:
-                    if self._create_task_if_not_exists(app.id, TaskType.FOLLOW_UP, app.current_role or "Claimed Officer", app.claimed_by_user_id):
+                    if self._create_task_if_not_exists(app.id, TaskType.FOLLOW_UP, app.current_role or "Underwriter", app.claimed_by_user_id):
                         stats["tasks_created"] += 1
                     else:
                         stats["tasks_already_existing"] += 1

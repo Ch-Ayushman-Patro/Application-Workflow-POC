@@ -160,7 +160,7 @@ function AdminDashboard() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Cases" value={scope.allApplications.length} sub="In the system" />
-        <KpiCard label="Unassigned" value={scope.unclaimedApplications.length} sub="Awaiting officer" accent={scope.unclaimedApplications.length > 0 ? "amber" : "slate"} />
+        <KpiCard label="Unassigned" value={scope.unclaimedApplications.length} sub="Awaiting underwriter" accent={scope.unclaimedApplications.length > 0 ? "amber" : "slate"} />
         <KpiCard label="In Progress" value={inProgress} sub="Under review" accent="indigo" />
         <KpiCard label="Completion Rate" value={`${completionRate}%`} sub={`${completedCount} finished`} accent={completionRate >= 50 ? "emerald" : "rose"} />
       </div>
@@ -179,7 +179,7 @@ function AdminDashboard() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-900">
-                      {scope.adminActionTasks.length} case{scope.adminActionTasks.length > 1 ? "s" : ""} need officer assignment
+                      {scope.adminActionTasks.length} case{scope.adminActionTasks.length > 1 ? "s" : ""} need underwriter assignment
                     </div>
                     <div className="text-xs text-slate-500">
                       Unclaimed for &gt;24 hours — ASSIGNMENT tasks pending
@@ -303,15 +303,15 @@ function ManagerDashboard() {
     (t) => t.task_type === "ESCALATION" && t.assigned_to_user_id === currentUser.id
   );
 
-  // Per-officer breakdown
-  const officerStats = scope.teamMembers.map((officer) => {
-    const officerApps = scope.allApplications.filter((a) => a.claimed_by_user_id === officer.id);
-    const activeCases = officerApps.filter((a) => a.status === "CLAIMED");
-    const overdueCases = officerApps.filter(
+  // Per-underwriter breakdown
+  const underwriterStats = scope.teamMembers.map((underwriter) => {
+    const underwriterApps = scope.allApplications.filter((a) => a.claimed_by_user_id === underwriter.id);
+    const activeCases = underwriterApps.filter((a) => a.status === "CLAIMED");
+    const overdueCases = underwriterApps.filter(
       (a) => a.status !== "COMPLETED" && getApplicationRisk(a).level !== "normal" && getApplicationRisk(a).level !== "completed"
     );
-    const officerTasks = scope.allOpenTasks.filter((t) => t.assigned_to_user_id === officer.id);
-    return { officer, activeCases, overdueCases, officerTasks };
+    const underwriterTasks = scope.allOpenTasks.filter((t) => t.assigned_to_user_id === underwriter.id);
+    return { underwriter, activeCases, overdueCases, underwriterTasks };
   });
 
   return (
@@ -363,7 +363,7 @@ function ManagerDashboard() {
                       Case #{task.application_id} escalated
                     </div>
                     <div className="text-xs text-rose-600">
-                      {task.assigned_to?.name ?? "Officer"} · {formatRelativeTime(task.created_at)}
+                      {task.assigned_to?.name ?? "Underwriter"} · {formatRelativeTime(task.created_at)}
                     </div>
                   </div>
                 </div>
@@ -376,20 +376,20 @@ function ManagerDashboard() {
         </div>
       )}
 
-      {/* Team Officer Overview */}
-      {officerStats.length > 0 && (
+      {/* Team Underwriter Overview */}
+      {underwriterStats.length > 0 && (
         <div>
           <SectionHeading>Team Overview</SectionHeading>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {officerStats.map(({ officer, activeCases, overdueCases, officerTasks }) => (
-              <div key={officer.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+            {underwriterStats.map(({ underwriter, activeCases, overdueCases, underwriterTasks }) => (
+              <div key={underwriter.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
-                    {officer.name.charAt(0)}
+                    {underwriter.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">{officer.name}</div>
-                    <div className="text-[11px] text-slate-500">{officer.role}</div>
+                    <div className="text-sm font-semibold text-slate-900">{underwriter.name}</div>
+                    <div className="text-[11px] text-slate-500">{underwriter.role}</div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -403,9 +403,9 @@ function ManagerDashboard() {
                     </div>
                     <div className="text-[10px] text-slate-500">Overdue</div>
                   </div>
-                  <div className={`rounded-xl p-2.5 ${officerTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
-                    <div className={`text-lg font-bold ${officerTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
-                      {officerTasks.length}
+                  <div className={`rounded-xl p-2.5 ${underwriterTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+                    <div className={`text-lg font-bold ${underwriterTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
+                      {underwriterTasks.length}
                     </div>
                     <div className="text-[10px] text-slate-500">Tasks</div>
                   </div>
@@ -451,10 +451,10 @@ function ManagerDashboard() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Officer Dashboard — Personal Workspace
+// Underwriter Dashboard — Personal Workspace
 // ──────────────────────────────────────────────────────────────────────────────
 
-function OfficerDashboard() {
+function UnderwriterDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
 
@@ -482,7 +482,7 @@ function OfficerDashboard() {
               {currentUser.name.split(" ")[0]}'s Workspace
             </h2>
             <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
-              Claimed Officer
+              Underwriter
             </span>
           </div>
           <p className="text-sm text-slate-500 mt-0.5">
@@ -617,5 +617,5 @@ export default function Dashboard() {
 
   if (currentRole === "Admin") return <AdminDashboard />;
   if (currentRole === "Manager") return <ManagerDashboard />;
-  return <OfficerDashboard />;
+  return <UnderwriterDashboard />;
 }

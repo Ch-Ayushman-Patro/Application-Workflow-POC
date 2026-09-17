@@ -139,16 +139,16 @@ export default function Analytics() {
     {
       rule: "Intake > 24h (Unassigned)",
       count: assignmentTasks.length,
-      impact: "Applications sitting without an assigned Claimed Officer.",
+      impact: "Applications sitting without an assigned Underwriter.",
       severity: assignmentTasks.length > 0 ? "amber" : "neutral",
-      action: "Assign to Claimed Officer"
+      action: "Assign to Underwriter"
     },
     {
-      rule: "Review > 24h (Officer Delay)",
+      rule: "Review > 24h (Underwriter Delay)",
       count: followUpTasks.length,
-      impact: "Claimed review has stalled past the initial 24-hour SLA window.",
+      impact: "Underwriting review has stalled past the initial 24-hour SLA window.",
       severity: followUpTasks.length > 0 ? "amber" : "neutral",
-      action: "Prompt officer follow-up"
+      action: "Prompt underwriter follow-up"
     },
     {
       rule: "Review > 48h (Manager Escalation)",
@@ -171,9 +171,9 @@ export default function Analytics() {
 
   // ── 5. Bottleneck Analysis ───────────────────────────────────────────────
   const bottleneckDescription = summary.bottleneck_stage === "Unassigned"
-    ? "Applications are spending the longest accumulated time in the unassigned intake queue waiting for an officer to claim them."
-    : summary.bottleneck_stage === "Claimed Officer Review"
-    ? "Applications are spending the longest accumulated time under review by claimed officers after being assigned."
+    ? "Applications are spending the longest accumulated time in the unassigned intake queue waiting for an underwriter to claim them."
+    : summary.bottleneck_stage === "Underwriting Review"
+    ? "Applications are spending the longest accumulated time under review by underwriters after being assigned."
     : `The highest accumulated delay is currently concentrated in the ${summary.bottleneck_stage} stage.`;
 
   const bottleneckCases = summary.bottleneck_stage === "Unassigned"
@@ -263,12 +263,12 @@ export default function Analytics() {
                 </Badge>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Submitted applications awaiting Claimed Officer assignment. Over 24h triggers an Admin assignment task.
+                Submitted applications awaiting Underwriter assignment. Over 24h triggers an Admin assignment task.
               </p>
             </div>
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-slate-500">Requires:</span>
-              <span className="font-semibold text-slate-800">Officer Assignment</span>
+              <span className="font-semibold text-slate-800">Underwriter Assignment</span>
             </div>
           </div>
 
@@ -278,19 +278,19 @@ export default function Analytics() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5 text-indigo-500" />
-                  Claimed Officer Review
+                  Underwriting Review
                 </span>
                 <Badge variant="info" size="sm">
                   {claimedUnderReview.length} In Progress
                 </Badge>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Cases currently claimed by officers. &gt;24h triggers officer follow-up; &gt;48h triggers manager escalation.
+                Cases currently claimed by underwriters. &gt;24h triggers underwriter follow-up; &gt;48h triggers manager escalation.
               </p>
             </div>
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-slate-500">Requires:</span>
-              <span className="font-semibold text-slate-800">Officer Decision / Approval</span>
+              <span className="font-semibold text-slate-800">Underwriter Decision / Approval</span>
             </div>
           </div>
 
@@ -430,11 +430,11 @@ export default function Analytics() {
                   <strong className="text-indigo-700">{formatHoursToDaysAndHours(processingHours)} ({processingPercentage}%)</strong> is spent in active human processing (reviewing documents, underwriting, decisioning).
                 </li>
                 <li>
-                  <strong className="text-amber-700">{formatHoursToDaysAndHours(waitingHours)} ({waitingPercentage}%)</strong> is spent idle in queues waiting for officer assignment or SLA escalation resolution.
+                  <strong className="text-amber-700">{formatHoursToDaysAndHours(waitingHours)} ({waitingPercentage}%)</strong> is spent idle in queues waiting for underwriter assignment or SLA escalation resolution.
                 </li>
               </ul>
               <p className="text-[11px] text-slate-500 pt-1">
-                Operational takeaway: Reducing queue idle time before assignment yields significantly faster turnaround than accelerating officer review speed.
+                Operational takeaway: Reducing queue idle time before assignment yields significantly faster turnaround than accelerating underwriter review speed.
               </p>
             </div>
 

@@ -21,7 +21,7 @@ class TaskStatus(str, enum.Enum):
 class UserRole(str, enum.Enum):
     ADMIN = "Admin"
     MANAGER = "Manager"
-    CLAIMED_OFFICER = "Claimed Officer"
+    UNDERWRITER = "Underwriter"
 
 class User(Base):
     __tablename__ = "users"

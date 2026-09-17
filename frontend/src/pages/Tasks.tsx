@@ -40,8 +40,8 @@ const taskTypeLabel = (type: string) => {
 
 const taskTypeSLAContext = (type: string) => {
   if (type === "ESCALATION") return "Case breached 48h SLA — manager intervention required.";
-  if (type === "FOLLOW_UP") return "Claimed review exceeded 24h SLA — officer follow-up needed.";
-  if (type === "ASSIGNMENT") return "Case unclaimed for >24h — officer assignment required.";
+  if (type === "FOLLOW_UP") return "Claimed review exceeded 24h SLA — underwriter follow-up needed.";
+  if (type === "ASSIGNMENT") return "Case unclaimed for >24h — underwriter assignment required.";
   return "";
 };
 
@@ -62,7 +62,7 @@ const taskTypeSLAContext = (type: string) => {
  *   "team_tasks" → tasks assigned to my direct reports (by user ID)
  *   "all"        → all open tasks (full visibility)
  *
- * Claimed Officer:
+ * Underwriter:
  *   "my_tasks"   → tasks assigned to ME specifically (assigned_to_user_id === currentUser.id)
  *                  NOT by role — Charlie never sees Bob's tasks
  *   "all"        → all open tasks (optional full view)
@@ -89,7 +89,7 @@ function getScopeOptions(role: string): ScopeOption[] {
       { key: "all", label: "All Operations" },
     ];
   }
-  // Claimed Officer
+  // Underwriter
   return [
     { key: "my_tasks", label: "My Tasks" },
     { key: "all", label: "All Operations" },
@@ -370,11 +370,11 @@ export default function Tasks() {
         )}
       </div>
 
-      {/* Scope info banner for Officers */}
-      {currentRole === "Claimed Officer" && selectedScope === "my_tasks" && (
+      {/* Scope info banner for Underwriters */}
+      {currentRole === "Underwriter" && selectedScope === "my_tasks" && (
         <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          Showing only tasks assigned directly to <strong>{currentUser.name}</strong> — not all Claimed Officers.
+          Showing only tasks assigned directly to <strong>{currentUser.name}</strong> — not all Underwriters.
         </div>
       )}
 

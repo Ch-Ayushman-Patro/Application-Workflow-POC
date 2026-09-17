@@ -28,7 +28,7 @@ export default function Layout() {
   const openTasksCount = useMemo(() => {
     if (currentRole === "Admin") {
       return scope.adminActionTasks.length;
-    } else if (currentRole === "Claimed Officer") {
+    } else if (currentRole === "Underwriter") {
       return scope.myTasks.length;
     } else if (currentRole === "Manager") {
       return scope.myTasks.length + scope.myEscalations.length;

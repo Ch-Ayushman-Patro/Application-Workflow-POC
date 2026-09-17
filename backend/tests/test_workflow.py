@@ -44,7 +44,7 @@ def test_workflow_engine_creates_followup_and_escalation(db):
     db.add(u_admin)
     db.commit()
     
-    u_officer = User(name="Test Officer", role="Claimed Officer", manager_user_id=u_admin.id)
+    u_officer = User(name="Test Underwriter", role="Underwriter", manager_user_id=u_admin.id)
     db.add(u_officer)
     db.commit()
 
@@ -52,7 +52,7 @@ def test_workflow_engine_creates_followup_and_escalation(db):
         application_number="TEST-CLAIM-2",
         status=ApplicationStatus.CLAIMED,
         claimed_by_user_id=u_officer.id,
-        current_role="Claimed Officer",
+        current_role="Underwriter",
         created_at=now - timedelta(days=4),
         claimed_at=now - timedelta(days=3)
     )

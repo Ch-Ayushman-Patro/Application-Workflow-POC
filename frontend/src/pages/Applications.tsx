@@ -46,9 +46,9 @@ import { useRole } from "../context/RoleContext";
  *
  * Admin:    "all" (global) | "unclaimed" | "in_progress" | "overdue" | "completed"
  * Manager:  "my_team" (team apps) | "unclaimed" | "overdue" | "all" | "completed"
- * Officer:  "my_cases" (only currentUser's) | "all" | "completed"
- *
- * This ensures Officers cannot accidentally see each other's cases in the
+ * Underwriter: "my_cases" (only currentUser's) | "all" | "completed"
+ * 
+ * This ensures Underwriters cannot accidentally see each other's cases in the
  * primary view without explicitly switching to "All Applications".
  */
 
@@ -66,7 +66,7 @@ export default function Applications() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
-    if (currentRole === "Claimed Officer") return "my_cases";
+    if (currentRole === "Underwriter") return "my_cases";
     if (currentRole === "Manager") return "my_team";
     return "all";
   });
@@ -121,7 +121,7 @@ export default function Applications() {
   }).length;
 
   const tabs: TabDef[] = (() => {
-    if (currentRole === "Claimed Officer") {
+    if (currentRole === "Underwriter") {
       return [
         { key: "my_cases", label: `My Cases (${scope.myApplications.length})`, activeColor: "bg-emerald-600 text-white" },
         { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
@@ -182,14 +182,14 @@ export default function Applications() {
 
   // ── Header copy ──────────────────────────────────────────────────────────
   const pageTitle =
-    currentRole === "Claimed Officer"
+    currentRole === "Underwriter"
       ? `${currentUser.name.split(" ")[0]}'s Cases`
       : currentRole === "Manager"
       ? "Case Pipeline"
       : "All Applications";
 
   const pageSubtitle =
-    currentRole === "Claimed Officer"
+    currentRole === "Underwriter"
       ? `Manage your claimed applications. Switch to "All Applications" for full pipeline view.`
       : currentRole === "Manager"
       ? `Monitor your team's cases and the overall application pipeline.`
@@ -216,8 +216,8 @@ export default function Applications() {
         </div>
       </div>
 
-      {/* Officer scope note */}
-      {currentRole === "Claimed Officer" && activeTab === "my_cases" && (
+      {/* Underwriter scope note */}
+      {currentRole === "Underwriter" && activeTab === "my_cases" && (
         <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
           Showing cases claimed by <strong>{currentUser.name}</strong> only.
@@ -288,7 +288,7 @@ export default function Applications() {
               <TableRow>
                 <TableHead>Application</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Claimed Officer</TableHead>
+                <TableHead>Underwriter</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -345,7 +345,7 @@ export default function Applications() {
                       </div>
                     </TableCell>
 
-                    {/* Claimed Officer */}
+                    {/* Underwriter */}
                     <TableCell>
                       {app.claimed_by ? (
                         <div className="flex items-center gap-2">
@@ -389,8 +389,8 @@ export default function Applications() {
                             variant="primary"
                             onClick={() => {
                               setClaimTargetApp(app);
-                              const claimable = users.filter((u) => u.role === "Claimed Officer");
-                              if (currentRole === "Claimed Officer") {
+                              const claimable = users.filter((u) => u.role === "Underwriter");
+                              if (currentRole === "Underwriter") {
                                 setSelectedUserId(currentUser.id);
                               } else if (claimable.length > 0) {
                                 setSelectedUserId(claimable[0].id);
@@ -400,7 +400,7 @@ export default function Applications() {
                             }}
                             icon={<UserCheck className="w-3 h-3" />}
                           >
-                            {currentRole === "Claimed Officer" ? "Claim" : "Assign"}
+                            {currentRole === "Underwriter" ? "Claim" : "Assign"}
                           </Button>
                         )}
                         {app.status === "CLAIMED" && (
@@ -432,8 +432,8 @@ export default function Applications() {
       <Modal
         isOpen={!!claimTargetApp}
         onClose={() => setClaimTargetApp(null)}
-        title="Assign Case to Claimed Officer"
-        description={`Assign ${claimTargetApp?.application_number} to a Claimed Officer. The review SLA timer begins immediately.`}
+        title="Assign Case to Underwriter"
+        description={`Assign ${claimTargetApp?.application_number} to an Underwriter. The review SLA timer begins immediately.`}
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setClaimTargetApp(null)}>
@@ -453,15 +453,15 @@ export default function Applications() {
         <div className="space-y-4 py-2">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Assign to Claimed Officer
+              Assign to Underwriter
             </label>
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              {(users.filter((u) => u.role === "Claimed Officer").length > 0
-                ? users.filter((u) => u.role === "Claimed Officer")
+              {(users.filter((u) => u.role === "Underwriter").length > 0
+                ? users.filter((u) => u.role === "Underwriter")
                 : users
               ).map((u) => (
                 <option key={u.id} value={u.id}>
