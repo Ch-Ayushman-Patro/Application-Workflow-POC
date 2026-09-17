@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { useUserScope } from "../hooks/useUserScope";
-import { useAnalyticsSummary } from "../hooks/useWorkflowQueries";
 import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -16,7 +15,6 @@ import {
   UserCheck,
   Shield,
   Briefcase,
-  BarChart3,
   Users,
   TrendingUp,
 } from "lucide-react";
@@ -108,7 +106,6 @@ function ApplicationRow({ app }: { app: Application }) {
 function AdminDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
-  const { data: summary } = useAnalyticsSummary({ enabled: true });
 
   const inProgress = scope.allApplications.filter((a) => a.status === "CLAIMED").length;
   const completedCount = scope.allApplications.filter((a) => a.status === "COMPLETED").length;
@@ -200,7 +197,7 @@ function AdminDashboard() {
                     <div className="text-sm font-semibold text-slate-900">
                       {escalationCount} active escalation{escalationCount > 1 ? "s" : ""} in the system
                     </div>
-                    <div className="text-xs text-slate-500">Applications breached the 48h SLA — manager review required</div>
+                    <div className="text-xs text-slate-500">Applications breached the 48h SLA - manager review required</div>
                   </div>
                 </div>
                 <Link to="/tasks">
@@ -211,24 +208,6 @@ function AdminDashboard() {
               </div>
             </div>
           )}
-
-          {/* Process Intelligence teaser */}
-          <Link to="/analytics" className="p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors rounded-b-2xl">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center">
-                <BarChart3 className="w-4 h-4 text-indigo-600" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Process Intelligence</div>
-                <div className="text-xs text-slate-500">
-                  {summary
-                    ? `Pipeline: ${summary.bottleneck_stage} stage is the primary bottleneck`
-                    : "Analyze where Applications are getting stuck and why"}
-                </div>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
-          </Link>
         </div>
       </div>
 
