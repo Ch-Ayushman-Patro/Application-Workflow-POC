@@ -377,7 +377,7 @@ export default function Tasks() {
                   {selectedScope === "my_tasks"
                     ? `No tasks are currently assigned to ${currentUser.name}.`
                     : selectedScope === "my_action"
-                    ? "No assignment tasks pending — the queue is clear."
+                    ? "No assignment tasks pending - the queue is clear."
                     : "Run the workflow engine to check if any Applications need attention."}
                 </p>
               </>

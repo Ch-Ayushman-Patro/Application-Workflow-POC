@@ -167,7 +167,7 @@ function AdminDashboard() {
                       {scope.adminActionTasks.length} Application{scope.adminActionTasks.length > 1 ? "s" : ""} need underwriter assignment
                     </div>
                     <div className="text-xs text-slate-500">
-                      Unclaimed for &gt;24 hours — ASSIGNMENT tasks pending
+                      Unclaimed for &gt;24 hours - ASSIGNMENT tasks pending
                     </div>
                   </div>
                 </div>
