@@ -359,14 +359,6 @@ export default function Tasks() {
         )}
       </div>
 
-      {/* Scope info banner for Underwriters */}
-      {currentRole === "Underwriter" && selectedScope === "my_tasks" && (
-        <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          Showing only tasks assigned directly to <strong>{currentUser.name}</strong> — not all Underwriters.
-        </div>
-      )}
-
       {/* Task Table */}
       <Card>
         {loading ? (
