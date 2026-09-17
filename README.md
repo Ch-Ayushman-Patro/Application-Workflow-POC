@@ -4,21 +4,26 @@ This is a proof-of-concept (POC) demonstrating an Application Workflow Monitorin
 
 ## Architecture
 
-Detailed endpoint specifications, schemas, rules, and examples are documented in [`.docs/API.md`](.docs/API.md).
-
 The system uses a modern web stack:
+
 - **Backend**: Python, FastAPI, Pydantic, SQLAlchemy, Neon DB (PostgreSQL)
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, Recharts
 
 ### Workflow Rules Implemented
+
 1. **Assignment Task**: If an application is OPEN and NOT CLAIMED for > 1 day, create an ASSIGNMENT task for an Admin.
 2. **Follow-up Task**: If an application has been CLAIMED by an Underwriter for > 1 day, create a FOLLOW_UP task for that underwriter.
 3. **Escalation Task**: If an application has been CLAIMED for > 2 days, create an ESCALATION task for that underwriter's designated Manager (determined via `manager_user_id`).
+
 - *Idempotency*: Ensures that duplicate tasks are not created if one already exists for a specific application and rule.
 
 ### Role Model & Organizational Hierarchy
+
 The platform uses a standardized 3-tier organizational hierarchy:
-$$\text{Admin} \longrightarrow \text{Manager} \longrightarrow \text{Underwriter}$$
+
+$$
+\text{Admin} \longrightarrow \text{Manager} \longrightarrow \text{Underwriter}
+$$
 
 - **Admin** (e.g. Alice Admin): Supervisory/administrative user. Monitors applications, full portfolio health, and handles unclaimed assignment tasks.
 - **Manager** (e.g. Diana Manager): Supervises underwriters, monitors team cases, and resolves manager escalations.
@@ -71,6 +76,7 @@ python -m app.seed
 # Run the backend server
 uvicorn app.main:app --reload
 ```
+
 The API will be available at `http://localhost:8000/api`
 
 ### 2. Run the Frontend (React UI)
@@ -86,6 +92,7 @@ npm install
 # Start the Vite development server
 npm run dev
 ```
+
 The UI will be available at `http://localhost:5173` (or the port Vite outputs).
 
 ## Demo Walkthrough
@@ -98,7 +105,9 @@ The UI will be available at `http://localhost:5173` (or the port Vite outputs).
 6. Check the **Analytics** page to see Average Processing vs. Waiting times and bottleneck identification.
 
 ## Tests
+
 Unit tests run against the database using isolated transaction savepoints:
+
 ```bash
 cd backend
 python -m pytest tests/
