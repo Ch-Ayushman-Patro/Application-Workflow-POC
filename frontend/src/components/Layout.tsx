@@ -7,7 +7,6 @@ import {
   BarChart3, 
   Bell, 
   ShieldCheck, 
-  ChevronRight,
   ChevronDown,
   Workflow
 } from "lucide-react";
