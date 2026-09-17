@@ -24,25 +24,25 @@ def seed_db():
 
     # Create Users with organizational reporting hierarchy:
     # Admin -> Manager -> Underwriter
-    u_admin = User(name="Alice Admin", role=UserRole.ADMIN.value)
+    u_admin = User(name="Rohit", role=UserRole.ADMIN.value)
     db.add(u_admin)
     db.commit()
     db.refresh(u_admin)
     logger.info("Created user: %s (role=%s, id=%d).", u_admin.name, u_admin.role, u_admin.id)
 
-    u_mgr = User(name="Diana Manager", role=UserRole.MANAGER.value, manager_user_id=u_admin.id)
+    u_mgr = User(name="Neeraj", role=UserRole.MANAGER.value, manager_user_id=u_admin.id)
     db.add(u_mgr)
     db.commit()
     db.refresh(u_mgr)
     logger.info("Created user: %s (role=%s, id=%d).", u_mgr.name, u_mgr.role, u_mgr.id)
 
-    u_officer1 = User(name="Bob Underwriter", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
+    u_officer1 = User(name="Abhinav", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
     db.add(u_officer1)
     db.commit()
     db.refresh(u_officer1)
     logger.info("Created user: %s (role=%s, id=%d).", u_officer1.name, u_officer1.role, u_officer1.id)
 
-    u_officer2 = User(name="Charlie Underwriter", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
+    u_officer2 = User(name="Lakshay", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
     db.add(u_officer2)
     db.commit()
     db.refresh(u_officer2)
@@ -60,7 +60,7 @@ def seed_db():
             current_stage="Document Intake",
             created_at=now - timedelta(days=3)
         ),
-        # APP-1002: CLAIMED by Bob Underwriter, 1.5 days ago -> triggers FOLLOW_UP
+        # APP-1002: CLAIMED by Abhinav, 1.5 days ago -> triggers FOLLOW_UP
         Application(
             application_number="APP-1002",
             status=ApplicationStatus.CLAIMED,
@@ -70,7 +70,7 @@ def seed_db():
             created_at=now - timedelta(days=2.5),
             claimed_at=now - timedelta(days=1.5)
         ),
-        # APP-1003: CLAIMED by Charlie Underwriter, 3 days ago -> triggers FOLLOW_UP + ESCALATION to Diana Manager
+        # APP-1003: CLAIMED by Lakshay, 3 days ago -> triggers FOLLOW_UP + ESCALATION to Neeraj
         Application(
             application_number="APP-1003",
             status=ApplicationStatus.CLAIMED,
@@ -88,7 +88,7 @@ def seed_db():
             current_stage="New Intake Queue",
             created_at=now - timedelta(hours=4)
         ),
-        # APP-1005: Fresh CLAIMED by Bob Underwriter (2 hours ago) -> Healthy
+        # APP-1005: Fresh CLAIMED by Abhinav (2 hours ago) -> Healthy
         Application(
             application_number="APP-1005",
             status=ApplicationStatus.CLAIMED,
@@ -118,7 +118,7 @@ def seed_db():
             current_stage="Queue Triage",
             created_at=now - timedelta(days=1.8)
         ),
-        # APP-1008: CLAIMED by Bob Underwriter, 2.7 days ago -> triggers FOLLOW_UP + ESCALATION to Diana Manager
+        # APP-1008: CLAIMED by Abhinav, 2.7 days ago -> triggers FOLLOW_UP + ESCALATION to Neeraj
         Application(
             application_number="APP-1008",
             status=ApplicationStatus.CLAIMED,
@@ -128,7 +128,7 @@ def seed_db():
             created_at=now - timedelta(days=3.5),
             claimed_at=now - timedelta(days=2.7)
         ),
-        # APP-1009: CLAIMED by Charlie Underwriter, 1.4 days ago -> triggers FOLLOW_UP
+        # APP-1009: CLAIMED by Lakshay, 1.4 days ago -> triggers FOLLOW_UP
         Application(
             application_number="APP-1009",
             status=ApplicationStatus.CLAIMED,

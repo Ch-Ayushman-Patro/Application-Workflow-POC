@@ -747,7 +747,7 @@ export default function ApplicationDetail() {
                         Escalated To Manager
                       </div>
                       <div className="text-rose-700 text-[11px]">
-                        {escalationRecipientUser?.name || "Diana Manager"} is reviewing this Application.
+                        {escalationRecipientUser?.name || "Manager"} is reviewing this Application.
                       </div>
                     </div>
                   )}

@@ -63,7 +63,7 @@ const taskTypeSLAContext = (type: string) => {
  *
  * Underwriter:
  *   "my_tasks"   → tasks assigned to ME specifically (assigned_to_user_id === currentUser.id)
- *                  NOT by role — Charlie never sees Bob's tasks
+ *                  NOT by role — Abhinav never sees Lakshay's tasks
  *   "all"        → all open tasks (optional full view)
  */
 

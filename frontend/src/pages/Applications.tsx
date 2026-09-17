@@ -260,16 +260,11 @@ export default function Applications() {
             <TableBody>
               {filteredApps.map((app) => {
                 const risk = getApplicationRisk(app);
-                const hasEscalation = (app.tasks || []).some(
-                  (t) => t.status === "OPEN" && t.task_type === "ESCALATION"
-                );
 
                 return (
                   <TableRow
                     key={app.id}
-                    className={`hover:bg-slate-50 transition-colors ${
-                      hasEscalation ? "border-l-4 border-l-rose-400" : ""
-                    }`}
+                    className="hover:bg-slate-50 transition-colors"
                   >
                     {/* Application */}
                     <TableCell>
