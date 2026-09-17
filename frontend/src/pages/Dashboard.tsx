@@ -181,7 +181,7 @@ function AdminDashboard() {
           ) : (
             <div className="p-4 flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              <span className="text-sm text-slate-600">No assignment tasks pending — queue is clear.</span>
+              <span className="text-sm text-slate-600">No assignment tasks pending - queue is clear.</span>
             </div>
           )}
 
