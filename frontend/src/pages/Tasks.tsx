@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useUserScope } from "../hooks/useUserScope";
-import { useTasks, useApplications, useCompleteTask, useSimulateInflow } from "../hooks/useWorkflowQueries";
+import { useTasks, useApplications, useCompleteTask } from "../hooks/useWorkflowQueries";
 import type { Task } from "../types";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   ArrowUpRight,
   InboxIcon,
-  Sparkles,
   Filter,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
@@ -215,7 +214,6 @@ export default function Tasks() {
   const { data: allTasks = [], isLoading: loadingTasks } = useTasks();
   const { data: applications = [] } = useApplications();
   const completeMutation = useCompleteTask();
-  const simulateMutation = useSimulateInflow();
 
   const appNumberMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -225,15 +223,6 @@ export default function Tasks() {
 
   const loading = loadingTasks && allTasks.length === 0;
   const completing = completeMutation.isPending;
-  const simulating = simulateMutation.isPending;
-
-  const handleSimulate = async () => {
-    try {
-      await simulateMutation.mutateAsync({ count: 3, runWorkflow: true });
-    } catch (err) {
-      console.error("Failed to simulate inflow", err);
-    }
-  };
 
   const handleComplete = async () => {
     if (!selectedTask) return;
@@ -311,15 +300,6 @@ export default function Tasks() {
               {escalationCount} urgent escalation{escalationCount > 1 ? "s" : ""}
             </span>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSimulate}
-            loading={simulating}
-            icon={<Sparkles className="w-3.5 h-3.5 text-indigo-600" />}
-          >
-            Simulate Inflow (Demo)
-          </Button>
         </div>
       </div>
 

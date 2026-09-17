@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useUserScope } from "../hooks/useUserScope";
 import { useAnalyticsSummary } from "../hooks/useWorkflowQueries";
@@ -6,7 +5,6 @@ import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
-import { WorkflowRunModal } from "../components/WorkflowRunModal";
 import { getApplicationRisk, formatApplicationAge, formatRelativeTime } from "../utils/formatters";
 import {
   AlertTriangle,
@@ -20,7 +18,6 @@ import {
   Briefcase,
   BarChart3,
   Users,
-  Zap,
   TrendingUp,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
@@ -112,7 +109,6 @@ function AdminDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
   const { data: summary } = useAnalyticsSummary({ enabled: true });
-  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
 
   const inProgress = scope.allApplications.filter((a) => a.status === "CLAIMED").length;
   const completedCount = scope.allApplications.filter((a) => a.status === "COMPLETED").length;
@@ -123,12 +119,7 @@ function AdminDashboard() {
   const escalationCount = scope.allOpenTasks.filter((t) => t.task_type === "ESCALATION").length;
 
   // Top urgent Applications — escalated first, then at-risk, then attention
-  const urgentCases = [...scope.allOverdueApplications]
-    .sort((a, b) => {
-      const order = { escalated: 3, at_risk: 2, attention: 1, normal: 0, completed: -1 };
-      return order[getApplicationRisk(b).level] - order[getApplicationRisk(a).level];
-    })
-    .slice(0, 5);
+  const urgentCases = scope.allOverdueApplications.slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -152,9 +143,6 @@ function AdminDashboard() {
             </p>
           </div>
         </div>
-        <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5" />} onClick={() => setIsRunModalOpen(true)}>
-          Run Engine Scan
-        </Button>
       </div>
 
       {/* KPIs */}
@@ -283,7 +271,6 @@ function AdminDashboard() {
         </div>
       )}
 
-      <WorkflowRunModal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} />
     </div>
   );
 }
@@ -295,7 +282,6 @@ function AdminDashboard() {
 function ManagerDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
-  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
 
   const teamOverdueCount = scope.teamOverdueApplications.length;
   const allTeamTasks = [...scope.myTasks, ...scope.teamTasks];
@@ -336,9 +322,6 @@ function ManagerDashboard() {
             </p>
           </div>
         </div>
-        <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5" />} onClick={() => setIsRunModalOpen(true)}>
-          Run Engine Scan
-        </Button>
       </div>
 
       {/* KPIs */}
@@ -445,7 +428,6 @@ function ManagerDashboard() {
         </div>
       )}
 
-      <WorkflowRunModal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} />
     </div>
   );
 }

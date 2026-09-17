@@ -5,7 +5,6 @@ import {
   useUsers,
   useClaimApplication,
   useCompleteApplication,
-  useSimulateInflow,
 } from "../hooks/useWorkflowQueries";
 import { useUserScope } from "../hooks/useUserScope";
 import type { Application } from "../types";
@@ -33,7 +32,6 @@ import {
   CheckCircle2,
   ArrowUpRight,
   Layers,
-  Sparkles,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
 
@@ -81,19 +79,9 @@ export default function Applications() {
   // Mutations
   const claimMutation = useClaimApplication();
   const completeMutation = useCompleteApplication();
-  const simulateMutation = useSimulateInflow();
 
   const loading = (loadingApps && applications.length === 0) || (loadingUsers && users.length === 0);
-  const simulating = simulateMutation.isPending;
   const actionLoading = claimMutation.isPending || completeMutation.isPending;
-
-  const handleSimulate = async () => {
-    try {
-      await simulateMutation.mutateAsync({ count: 3, runWorkflow: true });
-    } catch (err) {
-      console.error("Failed to simulate inflow", err);
-    }
-  };
 
   const handleClaimSubmit = async () => {
     if (!claimTargetApp || !selectedUserId) return;
@@ -202,17 +190,6 @@ export default function Applications() {
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{pageTitle}</h2>
           <p className="text-sm text-slate-500 mt-0.5">{pageSubtitle}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSimulate}
-            loading={simulating}
-            icon={<Sparkles className="w-3.5 h-3.5 text-indigo-600" />}
-          >
-            Simulate Inflow (Demo)
-          </Button>
         </div>
       </div>
 
