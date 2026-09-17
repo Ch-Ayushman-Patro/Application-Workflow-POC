@@ -241,23 +241,6 @@ export default function Layout() {
 
           {/* Right header actions */}
           <div className="flex items-center gap-3">
-            {/* Demo Persona Indicator */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100/90 border border-slate-200 rounded-xl text-xs">
-              <span className="text-slate-500 text-[11px] hidden md:inline">Viewing as:</span>
-              <span className="font-semibold text-slate-800">{currentUser.name}</span>
-              <span className="text-slate-400 text-[11px] hidden lg:inline">/ Role:</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                currentRole === "Admin" ? "bg-purple-100 text-purple-700 border border-purple-200" :
-                currentRole === "Manager" ? "bg-blue-100 text-blue-700 border border-blue-200" :
-                "bg-emerald-100 text-emerald-700 border border-emerald-200"
-              }`}>
-                {currentRole}
-              </span>
-              <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80" title="Demo role simulation only — not real authentication">
-                DEMO
-              </span>
-            </div>
-
             <Link
               to="/tasks"
               className="relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
