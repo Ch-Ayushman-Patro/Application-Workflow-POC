@@ -179,8 +179,7 @@ export default function Layout() {
             {isRoleDropdownOpen && (
               <div className="absolute bottom-full left-0 right-0 mb-2 p-1.5 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 space-y-1">
                 <div className="px-2 py-1 text-[10px] text-slate-400 font-medium border-b border-slate-800/80 mb-1 flex items-center justify-between">
-                  <span>Switch User Persona:</span>
-                  <span className="text-[9px] text-slate-500">(Demo only)</span>
+                  <span>Switch User:</span>
                 </div>
                 {allUsers.map((u) => {
                   const isSelected = u.id === currentUser.id;
