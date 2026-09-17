@@ -136,7 +136,7 @@ function AdminDashboard() {
               </span>
             </div>
             <p className="text-sm text-slate-500 mt-0.5">
-              Global pipeline overview — {scope.allApplications.length} applications tracked.
+              Global pipeline overview - {scope.allApplications.length} applications tracked.
             </p>
           </div>
         </div>
