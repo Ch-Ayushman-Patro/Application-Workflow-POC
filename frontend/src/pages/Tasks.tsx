@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useUserScope } from "../hooks/useUserScope";
-import { useTasks, useCompleteTask, useSimulateInflow } from "../hooks/useWorkflowQueries";
+import { useTasks, useApplications, useCompleteTask } from "../hooks/useWorkflowQueries";
 import type { Task } from "../types";
 import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   ArrowUpRight,
   InboxIcon,
-  Sparkles,
   Filter,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
@@ -39,9 +38,9 @@ const taskTypeLabel = (type: string) => {
 };
 
 const taskTypeSLAContext = (type: string) => {
-  if (type === "ESCALATION") return "Case breached 48h SLA — manager intervention required.";
-  if (type === "FOLLOW_UP") return "Claimed review exceeded 24h SLA — officer follow-up needed.";
-  if (type === "ASSIGNMENT") return "Case unclaimed for >24h — officer assignment required.";
+  if (type === "ESCALATION") return "Application breached 48h SLA — manager intervention required.";
+  if (type === "FOLLOW_UP") return "Claimed review exceeded 24h SLA — underwriter follow-up needed.";
+  if (type === "ASSIGNMENT") return "Application unclaimed for >24h — underwriter assignment required.";
   return "";
 };
 
@@ -62,7 +61,7 @@ const taskTypeSLAContext = (type: string) => {
  *   "team_tasks" → tasks assigned to my direct reports (by user ID)
  *   "all"        → all open tasks (full visibility)
  *
- * Claimed Officer:
+ * Underwriter:
  *   "my_tasks"   → tasks assigned to ME specifically (assigned_to_user_id === currentUser.id)
  *                  NOT by role — Charlie never sees Bob's tasks
  *   "all"        → all open tasks (optional full view)
@@ -89,7 +88,7 @@ function getScopeOptions(role: string): ScopeOption[] {
       { key: "all", label: "All Operations" },
     ];
   }
-  // Claimed Officer
+  // Underwriter
   return [
     { key: "my_tasks", label: "My Tasks" },
     { key: "all", label: "All Operations" },
@@ -102,9 +101,11 @@ function getScopeOptions(role: string): ScopeOption[] {
 
 function TaskRow({
   task,
+  appNumber,
   onResolve,
 }: {
   task: Task;
+  appNumber?: string;
   onResolve: (task: Task) => void;
 }) {
   const isEscalation = task.task_type === "ESCALATION";
@@ -148,13 +149,13 @@ function TaskRow({
         </div>
       </TableCell>
 
-      {/* Case link */}
+      {/* Application link */}
       <TableCell>
         <Link
           to={`/applications/${task.application_id}`}
           className="font-mono text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
         >
-          Case #{task.application_id}
+          {appNumber || `APP-${task.application_id}`}
           <ArrowUpRight className="w-3 h-3 text-slate-400" />
         </Link>
       </TableCell>
@@ -211,25 +212,22 @@ export default function Tasks() {
 
   // Server-state (global)
   const { data: allTasks = [], isLoading: loadingTasks } = useTasks();
+  const { data: applications = [] } = useApplications();
   const completeMutation = useCompleteTask();
-  const simulateMutation = useSimulateInflow();
+
+  const appNumberMap = useMemo(() => {
+    const map = new Map<number, string>();
+    applications.forEach((a) => map.set(a.id, a.application_number));
+    return map;
+  }, [applications]);
 
   const loading = loadingTasks && allTasks.length === 0;
   const completing = completeMutation.isPending;
-  const simulating = simulateMutation.isPending;
-
-  const handleSimulate = async () => {
-    try {
-      await simulateMutation.mutateAsync({ count: 3, runWorkflow: true });
-    } catch (err) {
-      console.error("Failed to simulate inflow", err);
-    }
-  };
 
   const handleComplete = async () => {
     if (!selectedTask) return;
     try {
-      await completeMutation.mutateAsync(selectedTask.id);
+      await completeMutation.mutateAsync({ id: selectedTask.id, actorId: currentUser.id });
       setSelectedTask(null);
     } catch (err) {
       console.error("Failed to complete task", err);
@@ -302,15 +300,6 @@ export default function Tasks() {
               {escalationCount} urgent escalation{escalationCount > 1 ? "s" : ""}
             </span>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSimulate}
-            loading={simulating}
-            icon={<Sparkles className="w-3.5 h-3.5 text-indigo-600" />}
-          >
-            Simulate Inflow (Demo)
-          </Button>
         </div>
       </div>
 
@@ -370,14 +359,6 @@ export default function Tasks() {
         )}
       </div>
 
-      {/* Scope info banner for Officers */}
-      {currentRole === "Claimed Officer" && selectedScope === "my_tasks" && (
-        <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          Showing only tasks assigned directly to <strong>{currentUser.name}</strong> — not all Claimed Officers.
-        </div>
-      )}
-
       {/* Task Table */}
       <Card>
         {loading ? (
@@ -397,7 +378,7 @@ export default function Tasks() {
                     ? `No tasks are currently assigned to ${currentUser.name}.`
                     : selectedScope === "my_action"
                     ? "No assignment tasks pending — the queue is clear."
-                    : "Run the workflow engine to check if any cases need attention."}
+                    : "Run the workflow engine to check if any Applications need attention."}
                 </p>
               </>
             ) : (
@@ -413,7 +394,7 @@ export default function Tasks() {
               <TableRow>
                 <TableHead>Type</TableHead>
                 <TableHead>What needs to happen</TableHead>
-                <TableHead>Case</TableHead>
+                <TableHead>Application</TableHead>
                 <TableHead>Assigned To</TableHead>
                 <TableHead>Raised</TableHead>
                 <TableHead className="text-right">Action</TableHead>
@@ -421,7 +402,12 @@ export default function Tasks() {
             </TableHeader>
             <TableBody>
               {displayedTasks.map((task) => (
-                <TaskRow key={task.id} task={task} onResolve={setSelectedTask} />
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  appNumber={appNumberMap.get(task.application_id)}
+                  onResolve={setSelectedTask}
+                />
               ))}
             </TableBody>
           </Table>
@@ -433,7 +419,7 @@ export default function Tasks() {
         isOpen={!!selectedTask}
         onClose={() => setSelectedTask(null)}
         title="Mark Task as Resolved"
-        description={`Confirm that the issue for Case #${selectedTask?.application_id} has been addressed.`}
+        description={`Confirm that the issue for application ${appNumberMap.get(selectedTask?.application_id ?? 0) || (selectedTask?.application_id ? `APP-${selectedTask.application_id}` : "")} has been addressed.`}
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setSelectedTask(null)}>

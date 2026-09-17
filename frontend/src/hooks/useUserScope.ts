@@ -137,7 +137,7 @@ export function useUserScope(): UserScopeData {
   /**
    * Admin action tasks: tasks that require action from the currently active Admin user.
    * This is user-oriented: includes ASSIGNMENT tasks (assigned_to_role === "Admin")
-   * AND any task with assigned_to_user_id === currentUser.id (in case Admin has
+   * AND any task with assigned_to_user_id === currentUser.id (in Application Admin has
    * direct task assignments in future scenarios).
    */
   const adminActionTasks = useMemo(() => {

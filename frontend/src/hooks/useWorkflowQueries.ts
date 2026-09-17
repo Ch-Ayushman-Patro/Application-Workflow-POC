@@ -4,6 +4,7 @@ import {
   getApplication, 
   claimApplication, 
   completeApplication, 
+  decideApplication,
   getTimeline, 
   getTasks, 
   completeTask, 
@@ -94,8 +95,14 @@ export function useClaimApplication() {
 
 export function useCompleteApplication() {
   return useMutation({
-    mutationFn: (id: number) => completeApplication(id),
-    onSuccess: (_, id) => {
+    mutationFn: (variables: { id: number; actorId?: number } | number) => {
+      if (typeof variables === 'number') {
+        return completeApplication(variables);
+      }
+      return completeApplication(variables.id, variables.actorId);
+    },
+    onSuccess: (_, variables) => {
+      const id = typeof variables === 'number' ? variables : variables.id;
       // Invalidate applications, affected detail/timeline, tasks, and analytics
       queryClient.invalidateQueries({ queryKey: queryKeys.applications });
       queryClient.invalidateQueries({ queryKey: queryKeys.application(id) });
@@ -106,9 +113,28 @@ export function useCompleteApplication() {
   });
 }
 
+export function useDecideApplication() {
+  return useMutation({
+    mutationFn: ({ id, decision, actorId }: { id: number; decision: 'APPROVED' | 'REJECTED'; actorId?: number }) =>
+      decideApplication(id, decision, actorId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.applications });
+      queryClient.invalidateQueries({ queryKey: queryKeys.application(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeline(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.analytics });
+    },
+  });
+}
+
 export function useCompleteTask() {
   return useMutation({
-    mutationFn: (id: number) => completeTask(id),
+    mutationFn: (variables: { id: number; actorId?: number } | number) => {
+      if (typeof variables === 'number') {
+        return completeTask(variables);
+      }
+      return completeTask(variables.id, variables.actorId);
+    },
     onSuccess: (task) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
       if (task?.application_id) {

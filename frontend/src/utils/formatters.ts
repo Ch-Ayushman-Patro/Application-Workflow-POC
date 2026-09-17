@@ -79,11 +79,19 @@ export function getApplicationRisk(app: Application): {
   reason: string;
 } {
   if (app.status === 'COMPLETED') {
+    if (app.decision === 'REJECTED' || app.current_stage === 'Rejected') {
+      return {
+        level: 'completed',
+        label: 'Rejected',
+        badgeVariant: 'error',
+        reason: 'Application rejected'
+      };
+    }
     return {
       level: 'completed',
-      label: 'Completed',
+      label: 'Approved',
       badgeVariant: 'success',
-      reason: 'Case workflow completed'
+      reason: 'Application approved'
     };
   }
 

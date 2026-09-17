@@ -13,8 +13,8 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
     if not users:
         return {"cases_created": 0, "application_numbers": [], "workflow_stats": None}
     
-    # Claimed Officers for case assignment
-    operational_users = [u for u in users if u.role == UserRole.CLAIMED_OFFICER.value]
+    # Underwriters for case assignment
+    operational_users = [u for u in users if u.role == UserRole.UNDERWRITER.value]
     if not operational_users:
         operational_users = users
 
@@ -34,7 +34,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
     
     # 5 realistic scenarios:
     # 1. UNCLAIMED_BREACH: sitting open > 24h -> triggers ASSIGNMENT task for Admin
-    # 2. FOLLOW_UP_BREACH: claimed > 24h -> triggers FOLLOW_UP task for Claimed Officer
+    # 2. FOLLOW_UP_BREACH: claimed > 24h -> triggers FOLLOW_UP task for Underwriter
     # 3. ESCALATION_BREACH: claimed > 48h -> triggers ESCALATION to Manager + FOLLOW_UP
     # 4. FRESH_OPEN: arrived recently -> healthy unclaimed
     # 5. FRESH_CLAIMED: claimed recently -> healthy in-progress
@@ -54,7 +54,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.OPEN,
-                current_role="Admin",
+                current_role=None,
                 current_stage="New Intake Queue",
                 created_at=created_at
             )
@@ -80,7 +80,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 status=ApplicationStatus.CLAIMED,
                 claimed_by_user_id=assignee.id,
                 current_role=assignee.role,
-                current_stage="Claimed Officer Review",
+                current_stage="Underwriting Review",
                 created_at=created_at,
                 claimed_at=claimed_at
             )
@@ -102,7 +102,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 status=ApplicationStatus.CLAIMED,
                 claimed_by_user_id=assignee.id,
                 current_role=assignee.role,
-                current_stage="Claimed Officer Review",
+                current_stage="Underwriting Review",
                 created_at=created_at,
                 claimed_at=claimed_at
             )
@@ -117,7 +117,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.OPEN,
-                current_role="Admin",
+                current_role=None,
                 current_stage="New Intake Queue",
                 created_at=created_at
             )
@@ -135,7 +135,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
                 status=ApplicationStatus.CLAIMED,
                 claimed_by_user_id=assignee.id,
                 current_role=assignee.role,
-                current_stage="Claimed Officer Review",
+                current_stage="Underwriting Review",
                 created_at=created_at,
                 claimed_at=claimed_at
             )

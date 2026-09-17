@@ -1,4 +1,4 @@
-export type UserRole = "Admin" | "Manager" | "Claimed Officer";
+export type UserRole = "Admin" | "Manager" | "Underwriter";
 
 export interface User {
     id: number;
@@ -22,10 +22,13 @@ export interface Task {
     assigned_to?: User;
 }
 
+export type ApplicationDecision = "APPROVED" | "REJECTED";
+
 export interface Application {
     id: number;
     application_number: string;
     status: string;
+    decision?: ApplicationDecision | string | null;
     current_role?: string;
     current_stage?: string;
     claimed_by_user_id?: number;
@@ -50,6 +53,8 @@ export interface AnalyticsSummary {
     open_applications: number;
     claimed_applications: number;
     completed_applications: number;
+    approved_applications?: number;
+    rejected_applications?: number;
     pending_action: number;
     avg_processing_time_hours: number;
     avg_waiting_time_hours: number;

@@ -95,7 +95,7 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
                 loading={running} 
                 icon={<PlusCircle className="w-3.5 h-3.5 text-indigo-600" />}
               >
-                Simulate More Cases
+                Simulate More Applications
               </Button>
               <Button variant="primary" size="sm" onClick={handleClose}>
                 Done
@@ -115,7 +115,7 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
                 loading={running} 
                 icon={<Play className="w-3.5 h-3.5" />}
               >
-                Scan Current Cases Only
+                Scan Current Applications Only
               </Button>
               <Button 
                 variant="primary" 
@@ -177,7 +177,7 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
               <h4 className="text-sm font-bold">Workflow Scan Completed</h4>
               <p className="text-xs text-emerald-700 mt-0.5">
                 {simulatedCases.length > 0 
-                  ? `Injected ${simulatedCases.length} new cases (${simulatedCases.join(', ')}) and evaluated SLA rules.`
+                  ? `Injected ${simulatedCases.length} new Applications (${simulatedCases.join(', ')}) and evaluated SLA rules.`
                   : 'All active applications evaluated against pipeline SLA rules.'}
               </p>
             </div>
@@ -190,7 +190,7 @@ export function WorkflowRunModal({ isOpen, onClose, onSuccess }: WorkflowRunModa
                 <Activity className="w-4 h-4 text-slate-400" />
               </div>
               <div className="text-2xl font-bold text-slate-900">{result.applications_checked}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">Active cases in pipeline</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Active Applications in pipeline</div>
             </div>
 
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">

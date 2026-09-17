@@ -9,6 +9,10 @@ class ApplicationStatus(str, enum.Enum):
     CLAIMED = "CLAIMED"
     COMPLETED = "COMPLETED"
 
+class ApplicationDecision(str, enum.Enum):
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
 class TaskType(str, enum.Enum):
     ASSIGNMENT = "ASSIGNMENT"
     FOLLOW_UP = "FOLLOW_UP"
@@ -21,7 +25,7 @@ class TaskStatus(str, enum.Enum):
 class UserRole(str, enum.Enum):
     ADMIN = "Admin"
     MANAGER = "Manager"
-    CLAIMED_OFFICER = "Claimed Officer"
+    UNDERWRITER = "Underwriter"
 
 class User(Base):
     __tablename__ = "users"
@@ -38,6 +42,7 @@ class Application(Base):
     claimed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     current_role = Column(String, nullable=True)
     current_stage = Column(String, nullable=True)
+    decision = Column(String, nullable=True)
     
     claimed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

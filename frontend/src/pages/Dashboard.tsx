@@ -1,12 +1,9 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useUserScope } from "../hooks/useUserScope";
-import { useAnalyticsSummary } from "../hooks/useWorkflowQueries";
 import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
-import { WorkflowRunModal } from "../components/WorkflowRunModal";
 import { getApplicationRisk, formatApplicationAge, formatRelativeTime } from "../utils/formatters";
 import {
   AlertTriangle,
@@ -18,9 +15,7 @@ import {
   UserCheck,
   Shield,
   Briefcase,
-  BarChart3,
   Users,
-  Zap,
   TrendingUp,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
@@ -111,8 +106,6 @@ function ApplicationRow({ app }: { app: Application }) {
 function AdminDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
-  const { data: summary } = useAnalyticsSummary({ enabled: true });
-  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
 
   const inProgress = scope.allApplications.filter((a) => a.status === "CLAIMED").length;
   const completedCount = scope.allApplications.filter((a) => a.status === "COMPLETED").length;
@@ -122,13 +115,8 @@ function AdminDashboard() {
       : 0;
   const escalationCount = scope.allOpenTasks.filter((t) => t.task_type === "ESCALATION").length;
 
-  // Top urgent cases — escalated first, then at-risk, then attention
-  const urgentCases = [...scope.allOverdueApplications]
-    .sort((a, b) => {
-      const order = { escalated: 3, at_risk: 2, attention: 1, normal: 0, completed: -1 };
-      return order[getApplicationRisk(b).level] - order[getApplicationRisk(a).level];
-    })
-    .slice(0, 5);
+  // Top urgent Applications — escalated first, then at-risk, then attention
+  const urgentCases = scope.allOverdueApplications.slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -152,15 +140,12 @@ function AdminDashboard() {
             </p>
           </div>
         </div>
-        <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5" />} onClick={() => setIsRunModalOpen(true)}>
-          Run Engine Scan
-        </Button>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Total Cases" value={scope.allApplications.length} sub="In the system" />
-        <KpiCard label="Unassigned" value={scope.unclaimedApplications.length} sub="Awaiting officer" accent={scope.unclaimedApplications.length > 0 ? "amber" : "slate"} />
+        <KpiCard label="Total Applications" value={scope.allApplications.length} sub="In the system" />
+        <KpiCard label="Unassigned" value={scope.unclaimedApplications.length} sub="Awaiting underwriter" accent={scope.unclaimedApplications.length > 0 ? "amber" : "slate"} />
         <KpiCard label="In Progress" value={inProgress} sub="Under review" accent="indigo" />
         <KpiCard label="Completion Rate" value={`${completionRate}%`} sub={`${completedCount} finished`} accent={completionRate >= 50 ? "emerald" : "rose"} />
       </div>
@@ -169,7 +154,7 @@ function AdminDashboard() {
       <div>
         <SectionHeading>Needs My Attention</SectionHeading>
         <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
-          {/* Unassigned cases */}
+          {/* Unassigned Applications */}
           {scope.adminActionTasks.length > 0 ? (
             <div className="p-4">
               <div className="flex items-center justify-between">
@@ -179,7 +164,7 @@ function AdminDashboard() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-900">
-                      {scope.adminActionTasks.length} case{scope.adminActionTasks.length > 1 ? "s" : ""} need officer assignment
+                      {scope.adminActionTasks.length} Application{scope.adminActionTasks.length > 1 ? "s" : ""} need underwriter assignment
                     </div>
                     <div className="text-xs text-slate-500">
                       Unclaimed for &gt;24 hours — ASSIGNMENT tasks pending
@@ -212,7 +197,7 @@ function AdminDashboard() {
                     <div className="text-sm font-semibold text-slate-900">
                       {escalationCount} active escalation{escalationCount > 1 ? "s" : ""} in the system
                     </div>
-                    <div className="text-xs text-slate-500">Cases breached the 48h SLA — manager review required</div>
+                    <div className="text-xs text-slate-500">Applications breached the 48h SLA - manager review required</div>
                   </div>
                 </div>
                 <Link to="/tasks">
@@ -223,32 +208,14 @@ function AdminDashboard() {
               </div>
             </div>
           )}
-
-          {/* Process Intelligence teaser */}
-          <Link to="/analytics" className="p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors rounded-b-2xl">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center">
-                <BarChart3 className="w-4 h-4 text-indigo-600" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Process Intelligence</div>
-                <div className="text-xs text-slate-500">
-                  {summary
-                    ? `Pipeline: ${summary.bottleneck_stage} stage is the primary bottleneck`
-                    : "Analyze where cases are getting stuck and why"}
-                </div>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
-          </Link>
         </div>
       </div>
 
-      {/* Priority Cases */}
+      {/* Priority Applications */}
       {urgentCases.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <SectionHeading>Priority Cases</SectionHeading>
+            <SectionHeading>Priority Applications</SectionHeading>
             <Link to="/applications?filter=OVERDUE" className="text-xs text-indigo-600 hover:underline font-medium">
               View all →
             </Link>
@@ -276,14 +243,13 @@ function AdminDashboard() {
             ))}
             {scope.unclaimedApplications.length > 4 && (
               <div className="px-4 py-3 text-xs text-slate-500 text-center">
-                +{scope.unclaimedApplications.length - 4} more unassigned cases
+                +{scope.unclaimedApplications.length - 4} more unassigned Applications
               </div>
             )}
           </div>
         </div>
       )}
 
-      <WorkflowRunModal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} />
     </div>
   );
 }
@@ -295,7 +261,6 @@ function AdminDashboard() {
 function ManagerDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
-  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
 
   const teamOverdueCount = scope.teamOverdueApplications.length;
   const allTeamTasks = [...scope.myTasks, ...scope.teamTasks];
@@ -303,15 +268,15 @@ function ManagerDashboard() {
     (t) => t.task_type === "ESCALATION" && t.assigned_to_user_id === currentUser.id
   );
 
-  // Per-officer breakdown
-  const officerStats = scope.teamMembers.map((officer) => {
-    const officerApps = scope.allApplications.filter((a) => a.claimed_by_user_id === officer.id);
-    const activeCases = officerApps.filter((a) => a.status === "CLAIMED");
-    const overdueCases = officerApps.filter(
+  // Per-underwriter breakdown
+  const underwriterStats = scope.teamMembers.map((underwriter) => {
+    const underwriterApps = scope.allApplications.filter((a) => a.claimed_by_user_id === underwriter.id);
+    const activeCases = underwriterApps.filter((a) => a.status === "CLAIMED");
+    const overdueCases = underwriterApps.filter(
       (a) => a.status !== "COMPLETED" && getApplicationRisk(a).level !== "normal" && getApplicationRisk(a).level !== "completed"
     );
-    const officerTasks = scope.allOpenTasks.filter((t) => t.assigned_to_user_id === officer.id);
-    return { officer, activeCases, overdueCases, officerTasks };
+    const underwriterTasks = scope.allOpenTasks.filter((t) => t.assigned_to_user_id === underwriter.id);
+    return { underwriter, activeCases, overdueCases, underwriterTasks };
   });
 
   return (
@@ -332,18 +297,15 @@ function ManagerDashboard() {
               </span>
             </div>
             <p className="text-sm text-slate-500 mt-0.5">
-              {scope.teamMembers.length} direct report{scope.teamMembers.length !== 1 ? "s" : ""} · {scope.teamApplications.length} team cases
+              {scope.teamMembers.length} direct report{scope.teamMembers.length !== 1 ? "s" : ""} · {scope.teamApplications.length} team Applications
             </p>
           </div>
         </div>
-        <Button variant="primary" size="sm" icon={<Zap className="w-3.5 h-3.5" />} onClick={() => setIsRunModalOpen(true)}>
-          Run Engine Scan
-        </Button>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Team Cases" value={scope.teamApplications.length} sub="Active in pipeline" accent="indigo" />
+        <KpiCard label="Team Applications" value={scope.teamApplications.length} sub="Active in pipeline" accent="indigo" />
         <KpiCard label="Team Overdue" value={teamOverdueCount} sub="Need intervention" accent={teamOverdueCount > 0 ? "rose" : "emerald"} />
         <KpiCard label="My Escalations" value={teamEscalations.length} sub="Assigned to me" accent={teamEscalations.length > 0 ? "rose" : "slate"} />
         <KpiCard label="Team Tasks" value={allTeamTasks.length} sub="Open action items" accent={allTeamTasks.length > 0 ? "amber" : "slate"} />
@@ -360,15 +322,15 @@ function ManagerDashboard() {
                   <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 animate-pulse" />
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-rose-900">
-                      Case #{task.application_id} escalated
+                      {scope.allApplications.find((a) => a.id === task.application_id)?.application_number || `APP-${task.application_id}`} escalated
                     </div>
                     <div className="text-xs text-rose-600">
-                      {task.assigned_to?.name ?? "Officer"} · {formatRelativeTime(task.created_at)}
+                      {task.assigned_to?.name ?? "Underwriter"} · {formatRelativeTime(task.created_at)}
                     </div>
                   </div>
                 </div>
                 <Link to={`/applications/${task.application_id}`}>
-                  <Button variant="danger" size="xs">Review Case</Button>
+                  <Button variant="danger" size="xs">Review Application</Button>
                 </Link>
               </div>
             ))}
@@ -376,20 +338,20 @@ function ManagerDashboard() {
         </div>
       )}
 
-      {/* Team Officer Overview */}
-      {officerStats.length > 0 && (
+      {/* Team Underwriter Overview */}
+      {underwriterStats.length > 0 && (
         <div>
           <SectionHeading>Team Overview</SectionHeading>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {officerStats.map(({ officer, activeCases, overdueCases, officerTasks }) => (
-              <div key={officer.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+            {underwriterStats.map(({ underwriter, activeCases, overdueCases, underwriterTasks }) => (
+              <div key={underwriter.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
-                    {officer.name.charAt(0)}
+                    {underwriter.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">{officer.name}</div>
-                    <div className="text-[11px] text-slate-500">{officer.role}</div>
+                    <div className="text-sm font-semibold text-slate-900">{underwriter.name}</div>
+                    <div className="text-[11px] text-slate-500">{underwriter.role}</div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -403,9 +365,9 @@ function ManagerDashboard() {
                     </div>
                     <div className="text-[10px] text-slate-500">Overdue</div>
                   </div>
-                  <div className={`rounded-xl p-2.5 ${officerTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
-                    <div className={`text-lg font-bold ${officerTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
-                      {officerTasks.length}
+                  <div className={`rounded-xl p-2.5 ${underwriterTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+                    <div className={`text-lg font-bold ${underwriterTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
+                      {underwriterTasks.length}
                     </div>
                     <div className="text-[10px] text-slate-500">Tasks</div>
                   </div>
@@ -413,7 +375,7 @@ function ManagerDashboard() {
                 {overdueCases.length > 0 && (
                   <Link to="/applications" className="block">
                     <Button variant="outline" size="xs" className="w-full" icon={<ChevronRight className="w-3 h-3" />}>
-                      View Cases
+                      View Applications
                     </Button>
                   </Link>
                 )}
@@ -423,11 +385,11 @@ function ManagerDashboard() {
         </div>
       )}
 
-      {/* Team overdue cases */}
+      {/* Team overdue Applications */}
       {scope.teamOverdueApplications.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <SectionHeading>Team Cases Needing Attention</SectionHeading>
+            <SectionHeading>Team Applications Needing Attention</SectionHeading>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
             {scope.teamOverdueApplications.slice(0, 5).map((app) => (
@@ -445,16 +407,15 @@ function ManagerDashboard() {
         </div>
       )}
 
-      <WorkflowRunModal isOpen={isRunModalOpen} onClose={() => setIsRunModalOpen(false)} />
     </div>
   );
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Officer Dashboard — Personal Workspace
+// Underwriter Dashboard — Personal Workspace
 // ──────────────────────────────────────────────────────────────────────────────
 
-function OfficerDashboard() {
+function UnderwriterDashboard() {
   const { currentUser } = useRole();
   const scope = useUserScope();
 
@@ -482,21 +443,21 @@ function OfficerDashboard() {
               {currentUser.name.split(" ")[0]}'s Workspace
             </h2>
             <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
-              Claimed Officer
+              Underwriter
             </span>
           </div>
           <p className="text-sm text-slate-500 mt-0.5">
-            Your personal casework · {scope.myApplications.length} cases claimed, {scope.myTasks.length} tasks pending.
+            Your personal casework · {scope.myApplications.length} Applications claimed, {scope.myTasks.length} tasks pending.
           </p>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="My Cases" value={scope.myApplications.length} sub="Total claimed" accent="indigo" />
+        <KpiCard label="My Applications" value={scope.myApplications.length} sub="Total claimed" accent="indigo" />
         <KpiCard label="Active" value={myActiveCases.length} sub="Under review" accent={myActiveCases.length > 0 ? "indigo" : "slate"} />
         <KpiCard label="Overdue" value={scope.myOverdueApplications.length} sub="Need follow-up" accent={scope.myOverdueApplications.length > 0 ? "rose" : "emerald"} />
-        <KpiCard label="Completed" value={completedMyCases} sub="Cases finished" accent="emerald" />
+        <KpiCard label="Completed" value={completedMyCases} sub="Applications finished" accent="emerald" />
       </div>
 
       {/* Follow-ups needing action */}
@@ -510,7 +471,7 @@ function OfficerDashboard() {
                   <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-amber-900">
-                      Case #{task.application_id} — SLA follow-up required
+                      {scope.allApplications.find((a) => a.id === task.application_id)?.application_number || `APP-${task.application_id}`} — SLA follow-up required
                     </div>
                     <div className="text-xs text-amber-700">
                       Claimed review has exceeded 24h · {formatRelativeTime(task.created_at)}
@@ -518,7 +479,7 @@ function OfficerDashboard() {
                   </div>
                 </div>
                 <Link to={`/applications/${task.application_id}`}>
-                  <Button variant="outline" size="xs">Open Case</Button>
+                  <Button variant="outline" size="xs">Open Application</Button>
                 </Link>
               </div>
             ))}
@@ -526,11 +487,11 @@ function OfficerDashboard() {
         </div>
       )}
 
-      {/* My Active Cases */}
+      {/* My Active Applications */}
       {myActiveCases.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <SectionHeading>My Active Cases</SectionHeading>
+            <SectionHeading>My Active Applications</SectionHeading>
             <Link to="/applications" className="text-xs text-indigo-600 hover:underline font-medium">
               View all →
             </Link>
@@ -550,14 +511,14 @@ function OfficerDashboard() {
             <InboxIcon className="w-7 h-7 text-slate-400" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-700">No active cases</p>
+            <p className="text-sm font-semibold text-slate-700">No active Applications</p>
             <p className="text-xs text-slate-400 mt-1">
-              Go to Case Pipeline to claim available applications.
+              Go to Application Pipeline to claim available applications.
             </p>
           </div>
           <Link to="/applications">
             <Button variant="outline" size="sm" icon={<TrendingUp className="w-3.5 h-3.5" />}>
-              Browse Cases
+              Browse Applications
             </Button>
           </Link>
         </div>
@@ -617,5 +578,5 @@ export default function Dashboard() {
 
   if (currentRole === "Admin") return <AdminDashboard />;
   if (currentRole === "Manager") return <ManagerDashboard />;
-  return <OfficerDashboard />;
+  return <UnderwriterDashboard />;
 }

@@ -5,7 +5,6 @@ import {
   useUsers,
   useClaimApplication,
   useCompleteApplication,
-  useSimulateInflow,
 } from "../hooks/useWorkflowQueries";
 import { useUserScope } from "../hooks/useUserScope";
 import type { Application } from "../types";
@@ -30,10 +29,8 @@ import {
 import {
   Search,
   UserCheck,
-  CheckCircle2,
   ArrowUpRight,
   Layers,
-  Sparkles,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
 
@@ -46,13 +43,13 @@ import { useRole } from "../context/RoleContext";
  *
  * Admin:    "all" (global) | "unclaimed" | "in_progress" | "overdue" | "completed"
  * Manager:  "my_team" (team apps) | "unclaimed" | "overdue" | "all" | "completed"
- * Officer:  "my_cases" (only currentUser's) | "all" | "completed"
- *
- * This ensures Officers cannot accidentally see each other's cases in the
+ * Underwriter: "my_cases" (only currentUser's) | "all" | "completed"
+ * 
+ * This ensures Underwriters cannot accidentally see each other's Applications in the
  * primary view without explicitly switching to "All Applications".
  */
 
-type TabKey = "my_cases" | "my_team" | "all" | "unclaimed" | "in_progress" | "overdue" | "completed";
+type TabKey = "my_cases" | "my_team" | "all" | "unclaimed" | "in_progress" | "overdue" | "approved" | "rejected" | "completed";
 
 interface TabDef {
   key: TabKey;
@@ -66,7 +63,7 @@ export default function Applications() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
-    if (currentRole === "Claimed Officer") return "my_cases";
+    if (currentRole === "Underwriter") return "my_cases";
     if (currentRole === "Manager") return "my_team";
     return "all";
   });
@@ -81,19 +78,9 @@ export default function Applications() {
   // Mutations
   const claimMutation = useClaimApplication();
   const completeMutation = useCompleteApplication();
-  const simulateMutation = useSimulateInflow();
 
   const loading = (loadingApps && applications.length === 0) || (loadingUsers && users.length === 0);
-  const simulating = simulateMutation.isPending;
   const actionLoading = claimMutation.isPending || completeMutation.isPending;
-
-  const handleSimulate = async () => {
-    try {
-      await simulateMutation.mutateAsync({ count: 3, runWorkflow: true });
-    } catch (err) {
-      console.error("Failed to simulate inflow", err);
-    }
-  };
 
   const handleClaimSubmit = async () => {
     if (!claimTargetApp || !selectedUserId) return;
@@ -106,26 +93,26 @@ export default function Applications() {
     }
   };
 
-  const handleCompleteApp = async (appId: number) => {
-    try {
-      await completeMutation.mutateAsync(appId);
-    } catch (err) {
-      console.error("Failed to complete application", err);
-    }
-  };
-
   // ── Tab definitions + counts ─────────────────────────────────────────────
   const overdueCounts = applications.filter((a) => {
     const r = getApplicationRisk(a);
     return r.level === "escalated" || r.level === "at_risk";
   }).length;
 
+  const approvedApps = applications.filter(
+    (a) => a.status === "COMPLETED" && (a.decision === "APPROVED" || a.current_stage === "Approved" || (!a.decision && a.current_stage !== "Rejected"))
+  );
+  const rejectedApps = applications.filter(
+    (a) => a.status === "COMPLETED" && (a.decision === "REJECTED" || a.current_stage === "Rejected")
+  );
+
   const tabs: TabDef[] = (() => {
-    if (currentRole === "Claimed Officer") {
+    if (currentRole === "Underwriter") {
       return [
-        { key: "my_cases", label: `My Cases (${scope.myApplications.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "my_cases", label: `My Applications (${scope.myApplications.length})`, activeColor: "bg-indigo-600 text-white" },
         { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
-        { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
       ];
     }
     if (currentRole === "Manager") {
@@ -134,7 +121,8 @@ export default function Applications() {
         { key: "unclaimed", label: `Unclaimed (${scope.unclaimedApplications.length})`, activeColor: "bg-amber-600 text-white" },
         { key: "overdue", label: `Overdue (${overdueCounts})`, activeColor: "bg-rose-600 text-white" },
         { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
-        { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
       ];
     }
     // Admin
@@ -143,7 +131,8 @@ export default function Applications() {
       { key: "unclaimed", label: `Unassigned (${scope.unclaimedApplications.length})`, activeColor: "bg-amber-600 text-white" },
       { key: "in_progress", label: `In Progress (${applications.filter((a) => a.status === "CLAIMED").length})`, activeColor: "bg-indigo-600 text-white" },
       { key: "overdue", label: `Overdue (${overdueCounts})`, activeColor: "bg-rose-600 text-white" },
-      { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+      { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
+      { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
     ];
   })();
 
@@ -163,6 +152,10 @@ export default function Applications() {
           const r = getApplicationRisk(a);
           return r.level === "escalated" || r.level === "at_risk";
         });
+      case "approved":
+        return approvedApps;
+      case "rejected":
+        return rejectedApps;
       case "completed":
         return applications.filter((a) => a.status === "COMPLETED");
       case "all":
@@ -182,17 +175,17 @@ export default function Applications() {
 
   // ── Header copy ──────────────────────────────────────────────────────────
   const pageTitle =
-    currentRole === "Claimed Officer"
-      ? `${currentUser.name.split(" ")[0]}'s Cases`
+    currentRole === "Underwriter"
+      ? `${currentUser.name.split(" ")[0]}'s Applications`
       : currentRole === "Manager"
-      ? "Case Pipeline"
+      ? "Application Pipeline"
       : "All Applications";
 
   const pageSubtitle =
-    currentRole === "Claimed Officer"
+    currentRole === "Underwriter"
       ? `Manage your claimed applications. Switch to "All Applications" for full pipeline view.`
       : currentRole === "Manager"
-      ? `Monitor your team's cases and the overall application pipeline.`
+      ? `Monitor your team's Applications and the overall application pipeline.`
       : "View and manage all loan applications across the system.";
 
   return (
@@ -203,34 +196,7 @@ export default function Applications() {
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{pageTitle}</h2>
           <p className="text-sm text-slate-500 mt-0.5">{pageSubtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSimulate}
-            loading={simulating}
-            icon={<Sparkles className="w-3.5 h-3.5 text-indigo-600" />}
-          >
-            Simulate Inflow (Demo)
-          </Button>
-        </div>
       </div>
-
-      {/* Officer scope note */}
-      {currentRole === "Claimed Officer" && activeTab === "my_cases" && (
-        <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          Showing cases claimed by <strong>{currentUser.name}</strong> only.
-        </div>
-      )}
-
-      {/* Manager scope note */}
-      {currentRole === "Manager" && activeTab === "my_team" && (
-        <div className="px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2">
-          <UserCheck className="w-3.5 h-3.5 shrink-0" />
-          Showing cases owned by your direct reports ({scope.teamMembers.map((m) => m.name).join(", ") || "none"}).
-        </div>
-      )}
 
       {/* Filter Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
@@ -252,7 +218,7 @@ export default function Applications() {
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search case # or name..."
+            placeholder="Search application number or name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-400 focus:outline-none"
@@ -288,7 +254,7 @@ export default function Applications() {
               <TableRow>
                 <TableHead>Application</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Claimed Officer</TableHead>
+                <TableHead>Underwriter</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -345,7 +311,7 @@ export default function Applications() {
                       </div>
                     </TableCell>
 
-                    {/* Claimed Officer */}
+                    {/* Underwriter */}
                     <TableCell>
                       {app.claimed_by ? (
                         <div className="flex items-center gap-2">
@@ -389,8 +355,8 @@ export default function Applications() {
                             variant="primary"
                             onClick={() => {
                               setClaimTargetApp(app);
-                              const claimable = users.filter((u) => u.role === "Claimed Officer");
-                              if (currentRole === "Claimed Officer") {
+                              const claimable = users.filter((u) => u.role === "Underwriter");
+                              if (currentRole === "Underwriter") {
                                 setSelectedUserId(currentUser.id);
                               } else if (claimable.length > 0) {
                                 setSelectedUserId(claimable[0].id);
@@ -400,22 +366,12 @@ export default function Applications() {
                             }}
                             icon={<UserCheck className="w-3 h-3" />}
                           >
-                            {currentRole === "Claimed Officer" ? "Claim" : "Assign"}
-                          </Button>
-                        )}
-                        {app.status === "CLAIMED" && (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() => handleCompleteApp(app.id)}
-                            icon={<CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                          >
-                            Complete
+                            {currentRole === "Underwriter" ? "Claim" : "Assign"}
                           </Button>
                         )}
                         <Link to={`/applications/${app.id}`}>
-                          <Button size="xs" variant="ghost">
-                            View
+                          <Button size="xs" variant={app.status === "CLAIMED" ? "primary" : "ghost"}>
+                            {app.status === "CLAIMED" ? "Review & Decide" : "View"}
                           </Button>
                         </Link>
                       </div>
@@ -432,8 +388,8 @@ export default function Applications() {
       <Modal
         isOpen={!!claimTargetApp}
         onClose={() => setClaimTargetApp(null)}
-        title="Assign Case to Claimed Officer"
-        description={`Assign ${claimTargetApp?.application_number} to a Claimed Officer. The review SLA timer begins immediately.`}
+        title="Assign Application to Underwriter"
+        description={`Assign ${claimTargetApp?.application_number} to an Underwriter. The review SLA timer begins immediately.`}
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setClaimTargetApp(null)}>
@@ -453,15 +409,15 @@ export default function Applications() {
         <div className="space-y-4 py-2">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Assign to Claimed Officer
+              Assign to Underwriter
             </label>
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(Number(e.target.value))}
               className="w-full text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              {(users.filter((u) => u.role === "Claimed Officer").length > 0
-                ? users.filter((u) => u.role === "Claimed Officer")
+              {(users.filter((u) => u.role === "Underwriter").length > 0
+                ? users.filter((u) => u.role === "Underwriter")
                 : users
               ).map((u) => (
                 <option key={u.id} value={u.id}>

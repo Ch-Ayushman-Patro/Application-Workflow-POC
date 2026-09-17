@@ -5,7 +5,7 @@ import { queryClient, queryKeys } from "../services/queryClient";
 
 /**
  * DEMO ROLE SIMULATION ONLY:
- * This context simulates different organizational roles (Admin, Manager, Claimed Officer)
+ * This context simulates different organizational roles (Admin, Manager, Underwriter)
  * for testing and demonstration purposes.
  * It is NOT an authentication or authorization system and does not enforce security boundaries.
  */
@@ -26,8 +26,8 @@ interface RoleContextType {
 const DEFAULT_USERS: User[] = [
   { id: 25, name: "Alice Admin", role: "Admin" },
   { id: 26, name: "Diana Manager", role: "Manager", manager_user_id: 25 },
-  { id: 27, name: "Bob Officer", role: "Claimed Officer", manager_user_id: 26 },
-  { id: 28, name: "Charlie Officer", role: "Claimed Officer", manager_user_id: 26 },
+  { id: 27, name: "Bob Underwriter", role: "Underwriter", manager_user_id: 26 },
+  { id: 28, name: "Charlie Underwriter", role: "Underwriter", manager_user_id: 26 },
 ];
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);

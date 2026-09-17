@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models.all import Application, Task, User, ApplicationEvent, ApplicationStatus, TaskStatus
+from app.models.all import Application, Task, User, ApplicationEvent, ApplicationStatus, TaskStatus, ApplicationDecision
 from datetime import datetime, timezone
 from typing import List
 
@@ -26,10 +26,22 @@ def claim_application(db: Session, app_id: int, user_id: int):
     app.status = ApplicationStatus.CLAIMED
     app.claimed_by_user_id = user_id
     app.claimed_at = datetime.now(timezone.utc)
-    app.current_stage = "Claimed Officer Review"
+    app.current_stage = "Underwriting Review"
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         app.current_role = user.role
+    
+    # Close open ASSIGNMENT tasks for this application
+    open_assignment_tasks = db.query(Task).filter(
+        Task.application_id == app_id, 
+        Task.task_type == "ASSIGNMENT", 
+        Task.status == TaskStatus.OPEN
+    ).all()
+    for task in open_assignment_tasks:
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = datetime.now(timezone.utc)
+        create_event(db, app_id, "TASK_COMPLETED", actor_id=user_id, details="Assignment task completed via claim")
+
     db.commit()
     db.refresh(app)
     create_event(db, app.id, "APPLICATION_CLAIMED", actor_id=user_id)
@@ -40,11 +52,64 @@ def complete_application(db: Session, app_id: int, actor_id: int = None):
     if not app:
         return None
     app.status = ApplicationStatus.COMPLETED
+    if not app.decision:
+        app.decision = ApplicationDecision.APPROVED.value
     app.completed_at = datetime.now(timezone.utc)
-    app.current_stage = "Completed"
+    app.current_stage = "Approved"
+    
+    # Close all open tasks for this application
+    open_tasks = db.query(Task).filter(
+        Task.application_id == app_id,
+        Task.status == TaskStatus.OPEN
+    ).all()
+    for task in open_tasks:
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = datetime.now(timezone.utc)
+        create_event(db, app_id, "TASK_COMPLETED", actor_id=actor_id, details=f"Task {task.task_type} completed via application completion")
+        
     db.commit()
     db.refresh(app)
     create_event(db, app.id, "APPLICATION_COMPLETED", actor_id=actor_id)
+    return app
+
+def decide_application(db: Session, app_id: int, decision: str, actor_id: int = None):
+    app = get_application(db, app_id)
+    if not app:
+        return None
+    
+    decision_norm = decision.upper()
+    if decision_norm not in [ApplicationDecision.APPROVED.value, ApplicationDecision.REJECTED.value]:
+        raise ValueError(f"Invalid decision: {decision}. Must be 'APPROVED' or 'REJECTED'")
+    
+    app.status = ApplicationStatus.COMPLETED
+    app.decision = decision_norm
+    app.completed_at = datetime.now(timezone.utc)
+    app.current_stage = "Approved" if decision_norm == ApplicationDecision.APPROVED.value else "Rejected"
+    
+    # Close all remaining open tasks
+    open_tasks = db.query(Task).filter(
+        Task.application_id == app_id,
+        Task.status == TaskStatus.OPEN
+    ).all()
+    for task in open_tasks:
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = datetime.now(timezone.utc)
+        create_event(db, app_id, "TASK_COMPLETED", actor_id=actor_id, details=f"Task {task.task_type} completed via application decision ({decision_norm})")
+        
+    db.commit()
+    db.refresh(app)
+    
+    actor_user = db.query(User).filter(User.id == actor_id).first() if actor_id else None
+    actor_name = actor_user.name if actor_user else (app.claimed_by.name if app.claimed_by else "Underwriter")
+    
+    if decision_norm == ApplicationDecision.APPROVED.value:
+        event_type = "APPLICATION_APPROVED"
+        details = f"Application approved by {actor_name}"
+    else:
+        event_type = "APPLICATION_REJECTED"
+        details = f"Application rejected by {actor_name}"
+        
+    create_event(db, app.id, event_type, actor_id=actor_id, details=details)
     return app
 
 def get_tasks(db: Session) -> List[Task]:

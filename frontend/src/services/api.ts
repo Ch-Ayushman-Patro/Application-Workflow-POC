@@ -10,11 +10,15 @@ const api = axios.create({
 export const getApplications = () => api.get<Application[]>('/applications').then(res => res.data);
 export const getApplication = (id: number) => api.get<Application>(`/applications/${id}`).then(res => res.data);
 export const claimApplication = (id: number, userId: number) => api.post<Application>(`/applications/${id}/claim?user_id=${userId}`).then(res => res.data);
-export const completeApplication = (id: number) => api.post<Application>(`/applications/${id}/complete`).then(res => res.data);
+export const completeApplication = (id: number, actorId?: number) => 
+  api.post<Application>(`/applications/${id}/complete${actorId !== undefined && actorId !== null ? `?actor_id=${actorId}` : ''}`).then(res => res.data);
+export const decideApplication = (id: number, decision: 'APPROVED' | 'REJECTED', actorId?: number) => 
+  api.post<Application>(`/applications/${id}/decision`, { decision, actor_id: actorId }).then(res => res.data);
 export const getTimeline = (id: number) => api.get<ApplicationEvent[]>(`/applications/${id}/timeline`).then(res => res.data);
 
 export const getTasks = () => api.get<Task[]>('/tasks').then(res => res.data);
-export const completeTask = (id: number) => api.post<Task>(`/tasks/${id}/complete`).then(res => res.data);
+export const completeTask = (id: number, actorId?: number) => 
+  api.post<Task>(`/tasks/${id}/complete${actorId !== undefined && actorId !== null ? `?actor_id=${actorId}` : ''}`).then(res => res.data);
 
 export const getUsers = () => api.get<User[]>('/users').then(res => res.data);
 

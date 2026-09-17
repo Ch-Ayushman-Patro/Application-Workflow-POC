@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from app.models.all import ApplicationStatus, TaskType, TaskStatus
+from app.models.all import ApplicationStatus, TaskType, TaskStatus, ApplicationDecision
 
 class UserBase(BaseModel):
     name: str
@@ -46,6 +46,7 @@ class ApplicationBase(BaseModel):
     status: ApplicationStatus = ApplicationStatus.OPEN
     current_role: Optional[str] = None
     current_stage: Optional[str] = None
+    decision: Optional[str] = None
 
 class ApplicationResponse(ApplicationBase):
     id: int
@@ -58,6 +59,10 @@ class ApplicationResponse(ApplicationBase):
     class Config:
         from_attributes = True
 
+class DecisionRequest(BaseModel):
+    decision: str
+    actor_id: Optional[int] = None
+
 class WorkflowRunResponse(BaseModel):
     applications_checked: int
     tasks_created: int
@@ -69,6 +74,8 @@ class AnalyticsSummary(BaseModel):
     open_applications: int
     claimed_applications: int
     completed_applications: int
+    approved_applications: int = 0
+    rejected_applications: int = 0
     pending_action: int
     avg_processing_time_hours: float
     avg_waiting_time_hours: float

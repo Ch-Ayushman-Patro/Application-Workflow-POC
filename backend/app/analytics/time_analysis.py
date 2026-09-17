@@ -11,6 +11,8 @@ def calculate_summary(db: Session):
     open_apps = sum(1 for a in apps if a.status == ApplicationStatus.OPEN)
     claimed = sum(1 for a in apps if a.status == ApplicationStatus.CLAIMED)
     completed = sum(1 for a in apps if a.status == ApplicationStatus.COMPLETED)
+    approved_apps = sum(1 for a in apps if a.decision == "APPROVED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "APPROVED"))
+    rejected_apps = sum(1 for a in apps if a.decision == "REJECTED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "REJECTED"))
     
     pending_action = len([t for t in tasks if t.status == "OPEN"])
     total_escalations = sum(1 for t in tasks if t.task_type == TaskType.ESCALATION)
@@ -44,19 +46,18 @@ def calculate_summary(db: Session):
                 total_waiting += waiting
                 total_human_processing += processing
                 
-                stage = app.current_stage or app.current_role or "Unassigned"
-                stage_waiting[stage] = stage_waiting.get(stage, 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
             else:
                 waiting = (app_completed - app_created).total_seconds()
                 total_waiting += waiting
-                stage_waiting["Unassigned"] = stage_waiting.get("Unassigned", 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
 
         else:
             # For open apps, estimate current waiting/processing
             if app.status == ApplicationStatus.OPEN:
                 waiting = (now - app_created).total_seconds()
                 total_waiting += waiting
-                stage_waiting["Unassigned"] = stage_waiting.get("Unassigned", 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
             elif app.status == ApplicationStatus.CLAIMED:
                 app_claimed = app.claimed_at
                 if app_claimed.tzinfo is None:
@@ -66,8 +67,7 @@ def calculate_summary(db: Session):
                 total_waiting += waiting
                 total_human_processing += processing
                 
-                stage = app.current_stage or app.current_role or "Unassigned"
-                stage_waiting[stage] = stage_waiting.get(stage, 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
 
     avg_processing = (total_human_processing / total) / 3600.0 if total > 0 else 0
     avg_waiting = (total_waiting / total) / 3600.0 if total > 0 else 0
@@ -81,6 +81,8 @@ def calculate_summary(db: Session):
         "open_applications": open_apps,
         "claimed_applications": claimed,
         "completed_applications": completed,
+        "approved_applications": approved_apps,
+        "rejected_applications": rejected_apps,
         "pending_action": pending_action,
         "avg_processing_time_hours": avg_processing,
         "avg_waiting_time_hours": avg_waiting,

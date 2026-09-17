@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import endpoints
+from app.api.applications import router as applications_router
+from app.api.tasks import router as tasks_router
+from app.api.users import router as users_router
+from app.api.workflow import router as workflow_router
+from app.api.analytics import router as analytics_router
 from app.database import engine, Base
 import app.models.all
 
@@ -22,7 +26,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(endpoints.router, prefix="/api")
+app.include_router(applications_router, prefix="/api")
+app.include_router(tasks_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
+app.include_router(workflow_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api")
 
 @app.get("/")
 def root():

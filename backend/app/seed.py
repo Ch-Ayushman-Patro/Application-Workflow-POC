@@ -16,7 +16,7 @@ def seed_db():
     db.commit()
 
     # Create Users with organizational reporting hierarchy:
-    # Admin -> Manager -> Claimed Officer
+    # Admin -> Manager -> Underwriter
     u_admin = User(name="Alice Admin", role=UserRole.ADMIN.value)
     db.add(u_admin)
     db.commit()
@@ -27,12 +27,12 @@ def seed_db():
     db.commit()
     db.refresh(u_mgr)
 
-    u_officer1 = User(name="Bob Officer", role=UserRole.CLAIMED_OFFICER.value, manager_user_id=u_mgr.id)
+    u_officer1 = User(name="Bob Underwriter", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
     db.add(u_officer1)
     db.commit()
     db.refresh(u_officer1)
 
-    u_officer2 = User(name="Charlie Officer", role=UserRole.CLAIMED_OFFICER.value, manager_user_id=u_mgr.id)
+    u_officer2 = User(name="Charlie Underwriter", role=UserRole.UNDERWRITER.value, manager_user_id=u_mgr.id)
     db.add(u_officer2)
     db.commit()
     db.refresh(u_officer2)
@@ -45,27 +45,27 @@ def seed_db():
         Application(
             application_number="APP-1001",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="Document Intake",
             created_at=now - timedelta(days=3)
         ),
-        # APP-1002: CLAIMED by Bob Officer, 1.5 days ago -> triggers FOLLOW_UP
+        # APP-1002: CLAIMED by Bob Underwriter, 1.5 days ago -> triggers FOLLOW_UP
         Application(
             application_number="APP-1002",
             status=ApplicationStatus.CLAIMED,
             claimed_by_user_id=u_officer1.id,
             current_role=u_officer1.role,
-            current_stage="Claimed Officer Review",
+            current_stage="Underwriting Review",
             created_at=now - timedelta(days=2.5),
             claimed_at=now - timedelta(days=1.5)
         ),
-        # APP-1003: CLAIMED by Charlie Officer, 3 days ago -> triggers FOLLOW_UP + ESCALATION to Diana Manager
+        # APP-1003: CLAIMED by Charlie Underwriter, 3 days ago -> triggers FOLLOW_UP + ESCALATION to Diana Manager
         Application(
             application_number="APP-1003",
             status=ApplicationStatus.CLAIMED,
             claimed_by_user_id=u_officer2.id,
             current_role=u_officer2.role,
-            current_stage="Claimed Officer Review",
+            current_stage="Underwriting Review",
             created_at=now - timedelta(days=4.5),
             claimed_at=now - timedelta(days=3.0)
         ),
@@ -73,27 +73,28 @@ def seed_db():
         Application(
             application_number="APP-1004",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="New Intake Queue",
             created_at=now - timedelta(hours=4)
         ),
-        # APP-1005: Fresh CLAIMED by Bob Officer (2 hours ago) -> Healthy
+        # APP-1005: Fresh CLAIMED by Bob Underwriter (2 hours ago) -> Healthy
         Application(
             application_number="APP-1005",
             status=ApplicationStatus.CLAIMED,
             claimed_by_user_id=u_officer1.id,
             current_role=u_officer1.role,
-            current_stage="Claimed Officer Review",
+            current_stage="Underwriting Review",
             created_at=now - timedelta(hours=8),
             claimed_at=now - timedelta(hours=2)
         ),
-        # APP-1006: COMPLETED -> historical
+        # APP-1006: COMPLETED -> historical (APPROVED)
         Application(
             application_number="APP-1006",
             status=ApplicationStatus.COMPLETED,
+            decision="APPROVED",
             claimed_by_user_id=u_officer1.id,
             current_role=u_officer1.role,
-            current_stage="Completed",
+            current_stage="Approved",
             created_at=now - timedelta(days=5),
             claimed_at=now - timedelta(days=4),
             completed_at=now - timedelta(days=1)
@@ -102,48 +103,50 @@ def seed_db():
         Application(
             application_number="APP-1007",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="Queue Triage",
             created_at=now - timedelta(days=1.8)
         ),
-        # APP-1008: CLAIMED by Bob Officer, 2.7 days ago -> triggers FOLLOW_UP + ESCALATION to Diana Manager
+        # APP-1008: CLAIMED by Bob Underwriter, 2.7 days ago -> triggers FOLLOW_UP + ESCALATION to Diana Manager
         Application(
             application_number="APP-1008",
             status=ApplicationStatus.CLAIMED,
             claimed_by_user_id=u_officer1.id,
             current_role=u_officer1.role,
-            current_stage="Claimed Officer Review",
+            current_stage="Underwriting Review",
             created_at=now - timedelta(days=3.5),
             claimed_at=now - timedelta(days=2.7)
         ),
-        # APP-1009: CLAIMED by Charlie Officer, 1.4 days ago -> triggers FOLLOW_UP
+        # APP-1009: CLAIMED by Charlie Underwriter, 1.4 days ago -> triggers FOLLOW_UP
         Application(
             application_number="APP-1009",
             status=ApplicationStatus.CLAIMED,
             claimed_by_user_id=u_officer2.id,
             current_role=u_officer2.role,
-            current_stage="Claimed Officer Review",
+            current_stage="Underwriting Review",
             created_at=now - timedelta(days=2.2),
             claimed_at=now - timedelta(days=1.4)
         ),
-        # APP-1010: COMPLETED -> historical
+        # APP-1010: COMPLETED -> historical (REJECTED)
         Application(
             application_number="APP-1010",
             status=ApplicationStatus.COMPLETED,
+            decision="REJECTED",
             claimed_by_user_id=u_officer2.id,
             current_role=u_officer2.role,
-            current_stage="Completed",
+            current_stage="Rejected",
             created_at=now - timedelta(days=4),
             claimed_at=now - timedelta(days=3.2),
             completed_at=now - timedelta(days=1.8)
         ),
-        # APP-1011: COMPLETED -> historical
+        # APP-1011: COMPLETED -> historical (APPROVED)
         Application(
             application_number="APP-1011",
             status=ApplicationStatus.COMPLETED,
+            decision="APPROVED",
             claimed_by_user_id=u_admin.id,
             current_role=u_admin.role,
-            current_stage="Completed",
+            current_stage="Approved",
             created_at=now - timedelta(days=6),
             claimed_at=now - timedelta(days=5.5),
             completed_at=now - timedelta(days=4.8)
@@ -152,7 +155,7 @@ def seed_db():
         Application(
             application_number="APP-1012",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="Direct Online Submission",
             created_at=now - timedelta(hours=1)
         ),
@@ -177,15 +180,35 @@ def seed_db():
                 event_type="APPLICATION_CLAIMED",
                 actor_id=app.claimed_by_user_id,
                 timestamp=app.claimed_at,
-                details=f"Claimed by {app.claimed_by.name if app.claimed_by else 'Claimed Officer'}"
+                details=f"Claimed by {app.claimed_by.name if app.claimed_by else 'Underwriter'}"
             ))
         if app.completed_at:
-            db.add(ApplicationEvent(
-                application_id=app.id,
-                event_type="APPLICATION_COMPLETED",
-                timestamp=app.completed_at,
-                details=f"Application {app.application_number} finalized"
-            ))
+            if app.decision == "APPROVED":
+                actor_name = app.claimed_by.name if app.claimed_by else "Underwriter"
+                db.add(ApplicationEvent(
+                    application_id=app.id,
+                    event_type="APPLICATION_APPROVED",
+                    actor_id=app.claimed_by_user_id,
+                    timestamp=app.completed_at,
+                    details=f"Application {app.application_number} approved by {actor_name}"
+                ))
+            elif app.decision == "REJECTED":
+                actor_name = app.claimed_by.name if app.claimed_by else "Underwriter"
+                db.add(ApplicationEvent(
+                    application_id=app.id,
+                    event_type="APPLICATION_REJECTED",
+                    actor_id=app.claimed_by_user_id,
+                    timestamp=app.completed_at,
+                    details=f"Application {app.application_number} rejected by {actor_name}"
+                ))
+            else:
+                db.add(ApplicationEvent(
+                    application_id=app.id,
+                    event_type="APPLICATION_COMPLETED",
+                    actor_id=app.claimed_by_user_id,
+                    timestamp=app.completed_at,
+                    details=f"Application {app.application_number} finalized"
+                ))
             
     db.commit()
 
