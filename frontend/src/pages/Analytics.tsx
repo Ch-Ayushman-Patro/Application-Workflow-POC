@@ -118,7 +118,7 @@ export default function Analytics() {
     ? Math.round((summary.total_escalations / summary.total_applications) * 100)
     : 0;
 
-  // ── 2. Where Cases Are Stuck (Stage Breakdown) ───────────────────────────
+  // ── 2. Where Applications Are Stuck (Stage Breakdown) ───────────────────────────
   const openUnclaimed = applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id);
   const claimedUnderReview = applications.filter(a => a.status === "CLAIMED");
   const openTasks = tasks.filter(t => t.status === "OPEN");
@@ -126,7 +126,7 @@ export default function Analytics() {
   const followUpTasks = openTasks.filter(t => t.task_type === "FOLLOW_UP");
   const assignmentTasks = openTasks.filter(t => t.task_type === "ASSIGNMENT");
 
-  // Escalated cases (unique application IDs)
+  // Escalated Applications (unique application IDs)
   const escalatedAppIds = new Set(escalationTasks.map(t => t.application_id));
   const escalatedApps = applications.filter(a => escalatedAppIds.has(a.id));
 
@@ -159,7 +159,7 @@ export default function Analytics() {
     }
   ];
 
-  // ── 4. What Needs Attention (Actionable Cases) ───────────────────────────
+  // ── 4. What Needs Attention (Actionable Applications) ───────────────────────────
   const atRiskApps = applications
     .filter(a => a.status !== "COMPLETED")
     .map(app => ({ app, risk: getApplicationRisk(app) }))
@@ -170,13 +170,15 @@ export default function Analytics() {
     });
 
   // ── 5. Bottleneck Analysis ───────────────────────────────────────────────
-  const bottleneckDescription = summary.bottleneck_stage === "Unassigned"
+  const isQueueBottleneck = summary.bottleneck_stage === "Intake Queue" || summary.bottleneck_stage === "Unassigned";
+
+  const bottleneckDescription = isQueueBottleneck
     ? "Applications are spending the longest accumulated time in the unassigned intake queue waiting for an underwriter to claim them."
     : summary.bottleneck_stage === "Underwriting Review"
     ? "Applications are spending the longest accumulated time under review by underwriters after being assigned."
     : `The highest accumulated delay is currently concentrated in the ${summary.bottleneck_stage} stage.`;
 
-  const bottleneckCases = summary.bottleneck_stage === "Unassigned"
+  const bottleneckCases = isQueueBottleneck
     ? openUnclaimed
     : claimedUnderReview;
 
@@ -244,10 +246,10 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* SECTION 2: Where Cases Are Stuck */}
+      {/* SECTION 2: Where Applications Are Stuck */}
       <div>
         <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-          2. Where Are Cases Getting Stuck?
+          2. Where Are Applications Getting Stuck?
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Intake Queue */}
@@ -285,7 +287,7 @@ export default function Analytics() {
                 </Badge>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Cases currently claimed by underwriters. &gt;24h triggers underwriter follow-up; &gt;48h triggers manager escalation.
+                Applications currently claimed by underwriters. &gt;24h triggers underwriter follow-up; &gt;48h triggers manager escalation.
               </p>
             </div>
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
@@ -318,7 +320,7 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* SECTION 3: Why Are Cases Delayed (SLA Breach Breakdown) */}
+      {/* SECTION 3: Why Are Applications Delayed (SLA Breach Breakdown) */}
       <div>
         <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
           3. Why Are They Delayed? (Workflow Rule Triggers)
@@ -371,17 +373,17 @@ export default function Analytics() {
               </h3>
             </div>
             <span className="text-xs bg-white/10 px-2.5 py-1 rounded-lg font-medium text-slate-200 shrink-0">
-              {bottleneckCases.length} Cases Affected
+              {bottleneckCases.length} Applications Affected
             </span>
           </div>
           <p className="text-sm text-slate-300 max-w-3xl leading-relaxed">
             {bottleneckDescription} This stage has accumulated the most idle waiting hours across the portfolio.
           </p>
 
-          {/* Quick list of cases in the bottleneck stage */}
+          {/* Quick list of Applications in the bottleneck stage */}
           {bottleneckCases.length > 0 && (
             <div className="pt-2 border-t border-white/10 space-y-2">
-              <div className="text-xs font-semibold text-slate-300">Cases currently delayed in this stage:</div>
+              <div className="text-xs font-semibold text-slate-300">Applications currently delayed in this stage:</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                 {bottleneckCases.slice(0, 6).map(app => (
                   <Link

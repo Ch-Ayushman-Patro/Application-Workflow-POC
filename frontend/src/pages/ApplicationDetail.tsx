@@ -31,7 +31,8 @@ import {
   Calendar,
   AlertTriangle,
   ArrowRight,
-  Info
+  Info,
+  Zap
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
 
@@ -73,7 +74,7 @@ export default function ApplicationDetail() {
 
   const handleCompleteApp = async () => {
     try {
-      await completeAppMutation.mutateAsync(appId);
+      await completeAppMutation.mutateAsync({ id: appId, actorId: currentUser.id });
     } catch (err) {
       console.error("Failed to complete application", err);
     }
@@ -82,7 +83,7 @@ export default function ApplicationDetail() {
   const handleResolveTask = async () => {
     if (!resolvingTask) return;
     try {
-      await completeTaskMutation.mutateAsync(resolvingTask.id);
+      await completeTaskMutation.mutateAsync({ id: resolvingTask.id, actorId: currentUser.id });
       setResolvingTask(null);
     } catch (err) {
       console.error("Failed to resolve task", err);
@@ -134,7 +135,7 @@ export default function ApplicationDetail() {
         : Math.max(0, Number(((now - claimedTime) / (1000 * 3600)).toFixed(1))))
     : 0;
 
-  // ── Determine Current Concrete Case State ────────────────────────────────
+  // ── Determine Current Concrete Application State ────────────────────────────────
   type CaseStateKey = "UNASSIGNED" | "IN_REVIEW" | "OVERDUE" | "ESCALATED" | "COMPLETED";
 
   const currentCaseState: CaseStateKey = isCompleted
@@ -163,16 +164,16 @@ export default function ApplicationDetail() {
     ? allUsers.find(u => u.id === escalationTask.assigned_to_user_id)
     : officerManager || allUsers.find(u => u.role === "Manager");
 
-  // Can the current user complete the case?
-  // Only the assigned Underwriter or an Administrator can complete a case
+  // Can the current user complete the Application?
+  // Only the assigned Underwriter or an Administrator can complete a Application
   const canCompleteCase = isClaimed && !isCompleted && (isAssignedOfficer || isAdmin);
 
-  // Can current user assign the case?
-  // Business rule: Unassigned cases require Admin assignment
-  const canAssignCase = isUnassigned && isAdmin;
+  // Can current user assign the Application?
+  // Business rule: Unassigned Applications require Admin assignment, but Underwriters can also claim them
+  const canAssignCase = isUnassigned && (isAdmin || currentRole === "Underwriter");
 
   // ── Compact Journey Stepper Model ────────────────────────────────────────
-  // Steps: Intake Ingested -> Underwriter Assignment -> Underwriting Review -> Case Decision
+  // Steps: Intake Ingested -> Underwriter Assignment -> Underwriting Review -> Application Decision
   const journeyMilestones = [
     {
       id: "intake",
@@ -213,10 +214,10 @@ export default function ApplicationDetail() {
     },
     {
       id: "decision",
-      label: "4. Case Decision",
+      label: "4. Application Decision",
       status: isCompleted ? ("current" as const) : ("upcoming" as const),
       timestamp: isCompleted ? formatDate(application.completed_at) : "Pending resolution",
-      detail: isCompleted ? "Case successfully closed" : "Final approval & closure",
+      detail: isCompleted ? "Application successfully closed" : "Final approval & closure",
     },
   ];
 
@@ -229,7 +230,7 @@ export default function ApplicationDetail() {
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to Case Pipeline
+          Back to Application Pipeline
         </Link>
 
         <div className="flex items-center gap-2 text-xs">
@@ -259,7 +260,7 @@ export default function ApplicationDetail() {
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           {/* Left Column: Context & State Diagnosis */}
           <div className="space-y-4 max-w-3xl">
-            {/* Case Header & State Badge */}
+            {/* Application Header & State Badge */}
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="font-mono text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
                 {application.application_number}
@@ -288,7 +289,7 @@ export default function ApplicationDetail() {
               )}
               {currentCaseState === "COMPLETED" && (
                 <Badge variant="success" size="md" dot>
-                  Case Resolved & Closed
+                  Application Resolved & Closed
                 </Badge>
               )}
 
@@ -345,12 +346,12 @@ export default function ApplicationDetail() {
                     Underwriting Review has breached the 24-hour target SLA.
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    <strong>Why:</strong> Case was claimed by <strong>{application.claimed_by?.name}</strong> on {formatDate(application.claimed_at)} ({formatHoursToDaysAndHours(reviewDurationHours)} ago). 
+                    <strong>Why:</strong> Application was claimed by <strong>{application.claimed_by?.name}</strong> on {formatDate(application.claimed_at)} ({formatHoursToDaysAndHours(reviewDurationHours)} ago). 
                     A <strong>FOLLOW_UP</strong> task was dispatched to prompt review progression.
                   </p>
                   <p className="text-xs text-slate-500 flex items-center gap-1.5 pt-0.5">
                     <ArrowRight className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span><strong>What happens next:</strong> If the review is not completed or resolved before <strong>48 hours</strong>, the case will automatically escalate to Manager <strong>{officerManager?.name || "Diana Manager"}</strong>.</span>
+                    <span><strong>What happens next:</strong> If the review is not completed or resolved before <strong>48 hours</strong>, the Application will automatically escalate to Manager <strong>{officerManager?.name || "Diana Manager"}</strong>.</span>
                   </p>
                 </div>
               )}
@@ -360,11 +361,11 @@ export default function ApplicationDetail() {
                 <div className="space-y-2">
                   <div className="text-sm font-semibold text-rose-950 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 animate-pulse" />
-                    Critical SLA Breach: Case escalated to Management.
+                    Critical SLA Breach: Application escalated to Management.
                   </div>
                   <div className="p-3 bg-white/80 rounded-xl border border-rose-200 text-xs text-rose-900 space-y-1">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                      <span><strong>Case Owner:</strong> {application.claimed_by?.name || "Underwriter"}</span>
+                      <span><strong>Application Owner:</strong> {application.claimed_by?.name || "Underwriter"}</span>
                       <span>•</span>
                       <span><strong>Escalation Recipient:</strong> {escalationRecipientUser?.name || "Manager"} (Manager)</span>
                       <span>•</span>
@@ -376,7 +377,7 @@ export default function ApplicationDetail() {
                   </div>
                   <p className="text-xs text-slate-500 flex items-center gap-1.5 pt-0.5">
                     <ArrowRight className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                    <span><strong>What happens next:</strong> The Manager reviews the bottleneck, resolves the escalation task, or directs final case completion.</span>
+                    <span><strong>What happens next:</strong> The Manager reviews the bottleneck, resolves the escalation task, or directs final Application completion.</span>
                   </p>
                 </div>
               )}
@@ -394,7 +395,7 @@ export default function ApplicationDetail() {
                   </p>
                   <p className="text-xs text-slate-500 flex items-center gap-1.5 pt-0.5">
                     <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>Status:</strong> Case is closed. No further operational actions are pending.</span>
+                    <span><strong>Status:</strong> Application is closed. No further operational actions are pending.</span>
                   </p>
                 </div>
               )}
@@ -430,7 +431,7 @@ export default function ApplicationDetail() {
                 Required Action
               </div>
 
-              {/* UNASSIGNED CASE ACTIONS */}
+              {/* UNASSIGNED Application ACTIONS */}
               {isUnassigned && (
                 <div className="space-y-2">
                   <div className="text-xs font-semibold text-slate-800">
@@ -439,7 +440,7 @@ export default function ApplicationDetail() {
                   <p className="text-[11px] text-slate-500">
                     {canAssignCase 
                       ? "Select an internal underwriter to take ownership of this file."
-                      : "This case is awaiting assignment by an Administrator."}
+                      : "This Application is awaiting assignment by an Administrator."}
                   </p>
                 </div>
               )}
@@ -448,12 +449,12 @@ export default function ApplicationDetail() {
               {(currentCaseState === "IN_REVIEW" || currentCaseState === "OVERDUE") && (
                 <div className="space-y-2">
                   <div className="text-xs font-semibold text-slate-800">
-                    Complete Case Review
+                    Complete Application Review
                   </div>
                   <p className="text-[11px] text-slate-500">
                     {canCompleteCase
-                      ? "Finalize decision and mark the case as resolved."
-                      : `Under review by ${application.claimed_by?.name}. Only the assigned underwriter or Admin can complete this case.`}
+                      ? "Finalize decision and mark the Application as resolved."
+                      : `Under review by ${application.claimed_by?.name}. Only the assigned underwriter or Admin can complete this Application.`}
                   </p>
                 </div>
               )}
@@ -477,7 +478,7 @@ export default function ApplicationDetail() {
                 <div className="space-y-1">
                   <div className="text-xs font-semibold text-emerald-800 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    Case Fully Resolved
+                    Application Fully Resolved
                   </div>
                   <p className="text-[11px] text-slate-500">
                     Decision logged on {formatDate(application.completed_at)}.
@@ -496,7 +497,9 @@ export default function ApplicationDetail() {
                   className="w-full"
                   onClick={() => {
                     const claimable = users.filter((u) => u.role === "Underwriter");
-                    if (claimable.length > 0) {
+                    if (currentRole === "Underwriter") {
+                      setSelectedUserId(currentUser.id);
+                    } else if (claimable.length > 0) {
                       setSelectedUserId(claimable[0].id);
                     } else if (users.length > 0) {
                       setSelectedUserId(users[0].id);
@@ -505,7 +508,7 @@ export default function ApplicationDetail() {
                   }}
                   icon={<UserCheck className="w-4 h-4" />}
                 >
-                  Assign Case
+                  {currentRole === "Underwriter" ? "Claim Application" : "Assign Application"}
                 </Button>
               )}
 
@@ -515,7 +518,7 @@ export default function ApplicationDetail() {
                 </div>
               )}
 
-              {/* Complete Case Trigger */}
+              {/* Complete Application Trigger */}
               {(currentCaseState === "IN_REVIEW" || currentCaseState === "OVERDUE") && canCompleteCase && (
                 <Button
                   variant="success"
@@ -525,7 +528,7 @@ export default function ApplicationDetail() {
                   loading={actionLoading}
                   icon={<CheckCircle2 className="w-4 h-4" />}
                 >
-                  Complete Case
+                  Complete Application
                 </Button>
               )}
 
@@ -556,7 +559,7 @@ export default function ApplicationDetail() {
                       loading={actionLoading}
                       icon={<CheckCircle2 className="w-4 h-4" />}
                     >
-                      Complete Case
+                      Complete Application
                     </Button>
                   ) : (
                     <div className="text-[11px] text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200 text-center font-medium">
@@ -584,7 +587,7 @@ export default function ApplicationDetail() {
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center justify-between mb-3">
           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Case Lifecycle Milestones
+            Application Lifecycle Milestones
           </div>
           <div className="text-xs text-slate-500 font-medium">
             Active Milestone: <strong className="text-slate-800">
@@ -679,7 +682,7 @@ export default function ApplicationDetail() {
                     <div className="text-xs font-bold text-slate-800">No Pending SLA Tasks</div>
                     <div className="text-[11px] text-slate-500">
                       {isCompleted 
-                        ? "Case workflow has been completed successfully." 
+                        ? "Application workflow has been completed successfully." 
                         : "Application is progressing normally within SLA thresholds."}
                     </div>
                   </div>
@@ -757,7 +760,7 @@ export default function ApplicationDetail() {
                   <Activity className="w-4 h-4 text-slate-500" />
                   Chronological Workflow Audit Log
                 </CardTitle>
-                <CardDescription>Complete historical audit trail of events recorded as this case progressed</CardDescription>
+                <CardDescription>Complete historical audit trail of events recorded as this Application progressed</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -784,7 +787,7 @@ export default function ApplicationDetail() {
                           {isComplete ? <Check className="w-2.5 h-2.5 stroke-3" /> : <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                         </div>
 
-                        <div className="space-y-0.5">
+                        <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs font-bold text-slate-900">
                               {event.event_type.replace(/_/g, " ")}
@@ -793,8 +796,42 @@ export default function ApplicationDetail() {
                               {formatDate(event.timestamp)} ({formatRelativeTime(event.timestamp)})
                             </span>
                           </div>
+
+                          {/* Actor Attribution */}
+                          {(() => {
+                            const actor = event.actor_id ? allUsers.find((u) => u.id === event.actor_id) : undefined;
+                            if (actor) {
+                              return (
+                                <div className="text-[11px] text-slate-700 font-medium flex items-center gap-1.5">
+                                  <UserCheck className="w-3 h-3 text-indigo-600 shrink-0" />
+                                  <span>
+                                    {event.event_type === "APPLICATION_COMPLETED"
+                                      ? `Completed by ${actor.name} (${actor.role})`
+                                      : event.event_type === "APPLICATION_CLAIMED"
+                                      ? `Claimed by ${actor.name} (${actor.role})`
+                                      : event.event_type === "TASK_COMPLETED"
+                                      ? `Task resolved by ${actor.name} (${actor.role})`
+                                      : `Action performed by ${actor.name} (${actor.role})`}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5">
+                                <Zap className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                                <span>
+                                  {event.event_type === "APPLICATION_CREATED"
+                                    ? "Submitted via intake portal"
+                                    : event.event_type === "TASK_CREATED"
+                                    ? "System workflow automated rule dispatch"
+                                    : "Automated workflow action"}
+                                </span>
+                              </div>
+                            );
+                          })()}
+
                           {event.details && (
-                            <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            <p className="text-xs text-slate-500 leading-relaxed">
                               {event.details}
                             </p>
                           )}
@@ -825,7 +862,7 @@ export default function ApplicationDetail() {
                     <div>
                       <div className="text-sm font-bold text-slate-900">{application.claimed_by.name}</div>
                       <div className="text-xs text-slate-500 font-medium">{application.claimed_by.role}</div>
-                      <div className="text-[10px] text-indigo-600 font-semibold mt-0.5">Primary Case Owner</div>
+                      <div className="text-[10px] text-indigo-600 font-semibold mt-0.5">Primary Application Owner</div>
                     </div>
                   </div>
 
@@ -845,7 +882,7 @@ export default function ApplicationDetail() {
                         Escalated To Manager
                       </div>
                       <div className="text-rose-700 text-[11px]">
-                        {escalationRecipientUser?.name || "Diana Manager"} is reviewing this case.
+                        {escalationRecipientUser?.name || "Diana Manager"} is reviewing this Application.
                       </div>
                     </div>
                   )}
@@ -871,13 +908,13 @@ export default function ApplicationDetail() {
                       }}
                       className="w-full"
                     >
-                      Assign Case Now
+                      Assign Application Now
                     </Button>
                   )}
                 </div>
               )}
 
-              {/* Case Stage & Role Properties */}
+              {/* Application Stage & Role Properties */}
               <div className="pt-2 border-t border-slate-100 space-y-2 text-xs">
                 <div className="flex justify-between text-slate-500">
                   <span>Current Workflow Role</span>
@@ -972,13 +1009,13 @@ export default function ApplicationDetail() {
       </div>
 
       {/* ────────────────────────────────────────────────────────────────────────────── */}
-      {/* 4. MODALS: Case Assignment & Task Resolution                                   */}
+      {/* 4. MODALS: Application Assignment & Task Resolution                                   */}
       {/* ────────────────────────────────────────────────────────────────────────────── */}
-      {/* Assign Case Modal */}
+      {/* Assign Application Modal */}
       <Modal
         isOpen={isClaimModalOpen}
         onClose={() => setIsClaimModalOpen(false)}
-        title="Assign Case to Underwriter"
+        title="Assign Application to Underwriter"
         description={`Assign application ${application.application_number} to an internal Underwriter. The 24-hour review SLA timer begins upon assignment.`}
         footer={
           <>
@@ -1061,7 +1098,7 @@ export default function ApplicationDetail() {
             </div>
             <div className="text-xs text-slate-500 flex items-center gap-2">
               <Info className="w-4 h-4 text-indigo-500 shrink-0" />
-              <span>Resolving this task updates the case workflow and refreshes SLA metrics.</span>
+              <span>Resolving this task updates the Application workflow and refreshes SLA metrics.</span>
             </div>
           </div>
         )}

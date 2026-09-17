@@ -94,8 +94,14 @@ export function useClaimApplication() {
 
 export function useCompleteApplication() {
   return useMutation({
-    mutationFn: (id: number) => completeApplication(id),
-    onSuccess: (_, id) => {
+    mutationFn: (variables: { id: number; actorId?: number } | number) => {
+      if (typeof variables === 'number') {
+        return completeApplication(variables);
+      }
+      return completeApplication(variables.id, variables.actorId);
+    },
+    onSuccess: (_, variables) => {
+      const id = typeof variables === 'number' ? variables : variables.id;
       // Invalidate applications, affected detail/timeline, tasks, and analytics
       queryClient.invalidateQueries({ queryKey: queryKeys.applications });
       queryClient.invalidateQueries({ queryKey: queryKeys.application(id) });
@@ -108,7 +114,12 @@ export function useCompleteApplication() {
 
 export function useCompleteTask() {
   return useMutation({
-    mutationFn: (id: number) => completeTask(id),
+    mutationFn: (variables: { id: number; actorId?: number } | number) => {
+      if (typeof variables === 'number') {
+        return completeTask(variables);
+      }
+      return completeTask(variables.id, variables.actorId);
+    },
     onSuccess: (task) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
       if (task?.application_id) {

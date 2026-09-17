@@ -45,10 +45,10 @@ export default function Layout() {
       adminOnly: false,
     },
     { 
-      name: "Case Pipeline", 
+      name: "Application Pipeline", 
       path: "/applications", 
       icon: Layers,
-      description: "Lifecycle tracking & cases",
+      description: "Lifecycle tracking & Applications",
       adminOnly: false,
     },
     { 
@@ -74,8 +74,8 @@ export default function Layout() {
 
   const getPageTitle = () => {
     if (location.pathname === "/") return { title: "Command Center", subtitle: "Live operations & risk monitoring" };
-    if (location.pathname.startsWith("/applications/")) return { title: "Case Workspace", subtitle: "Application details & workflow timeline" };
-    if (location.pathname.startsWith("/applications")) return { title: "Case Pipeline", subtitle: "Monitor and triage cases through lifecycle stages" };
+    if (location.pathname.startsWith("/applications/")) return { title: "Application Workspace", subtitle: "Application details & workflow timeline" };
+    if (location.pathname.startsWith("/applications")) return { title: "Application Pipeline", subtitle: "Monitor and triage Applications through lifecycle stages" };
     if (location.pathname.startsWith("/tasks")) return { title: "Operational Inbox", subtitle: "Triage assignments, follow-ups, and escalations" };
     if (location.pathname.startsWith("/analytics")) return { title: "Process Intelligence", subtitle: "Workflow velocity, waiting bottlenecks, and SLA health" };
     return { title: "Workflow Orchestrator", subtitle: "Application Monitoring POC" };
@@ -160,7 +160,7 @@ export default function Layout() {
             <span className="text-xs font-semibold text-slate-200">Trigger Orchestration</span>
           </div>
           <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
-            Scan unclaimed cases, evaluate SLAs, and trigger manager escalations.
+            Scan unclaimed Applications, evaluate SLAs, and trigger manager escalations.
           </p>
           <button
             onClick={() => setIsRunModalOpen(true)}

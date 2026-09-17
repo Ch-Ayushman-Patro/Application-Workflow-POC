@@ -30,6 +30,18 @@ def claim_application(db: Session, app_id: int, user_id: int):
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         app.current_role = user.role
+    
+    # Close open ASSIGNMENT tasks for this application
+    open_assignment_tasks = db.query(Task).filter(
+        Task.application_id == app_id, 
+        Task.task_type == "ASSIGNMENT", 
+        Task.status == TaskStatus.OPEN
+    ).all()
+    for task in open_assignment_tasks:
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = datetime.now(timezone.utc)
+        create_event(db, app_id, "TASK_COMPLETED", actor_id=user_id, details="Assignment task completed via claim")
+
     db.commit()
     db.refresh(app)
     create_event(db, app.id, "APPLICATION_CLAIMED", actor_id=user_id)
@@ -42,6 +54,17 @@ def complete_application(db: Session, app_id: int, actor_id: int = None):
     app.status = ApplicationStatus.COMPLETED
     app.completed_at = datetime.now(timezone.utc)
     app.current_stage = "Completed"
+    
+    # Close all open tasks for this application
+    open_tasks = db.query(Task).filter(
+        Task.application_id == app_id,
+        Task.status == TaskStatus.OPEN
+    ).all()
+    for task in open_tasks:
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = datetime.now(timezone.utc)
+        create_event(db, app_id, "TASK_COMPLETED", actor_id=actor_id, details=f"Task {task.task_type} completed via application completion")
+        
     db.commit()
     db.refresh(app)
     create_event(db, app.id, "APPLICATION_COMPLETED", actor_id=actor_id)

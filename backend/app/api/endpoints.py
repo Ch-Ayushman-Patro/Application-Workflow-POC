@@ -35,8 +35,8 @@ def claim_application(app_id: int, user_id: int, db: Session = Depends(get_db)):
     return app
 
 @router.post("/applications/{app_id}/complete", response_model=ApplicationResponse)
-def complete_application(app_id: int, db: Session = Depends(get_db)):
-    app = core.complete_application(db, app_id)
+def complete_application(app_id: int, actor_id: int = Query(None), db: Session = Depends(get_db)):
+    app = core.complete_application(db, app_id, actor_id=actor_id)
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
     return app
@@ -50,8 +50,8 @@ def get_tasks(db: Session = Depends(get_db)):
     return core.get_tasks(db)
 
 @router.post("/tasks/{task_id}/complete", response_model=TaskResponse)
-def complete_task(task_id: int, db: Session = Depends(get_db)):
-    task = core.complete_task(db, task_id)
+def complete_task(task_id: int, actor_id: int = Query(None), db: Session = Depends(get_db)):
+    task = core.complete_task(db, task_id, actor_id=actor_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task

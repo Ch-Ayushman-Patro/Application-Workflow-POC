@@ -45,7 +45,7 @@ def seed_db():
         Application(
             application_number="APP-1001",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="Document Intake",
             created_at=now - timedelta(days=3)
         ),
@@ -73,7 +73,7 @@ def seed_db():
         Application(
             application_number="APP-1004",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="New Intake Queue",
             created_at=now - timedelta(hours=4)
         ),
@@ -102,7 +102,7 @@ def seed_db():
         Application(
             application_number="APP-1007",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="Queue Triage",
             created_at=now - timedelta(days=1.8)
         ),
@@ -152,7 +152,7 @@ def seed_db():
         Application(
             application_number="APP-1012",
             status=ApplicationStatus.OPEN,
-            current_role="Admin",
+            current_role=None,
             current_stage="Direct Online Submission",
             created_at=now - timedelta(hours=1)
         ),

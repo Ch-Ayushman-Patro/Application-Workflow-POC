@@ -83,7 +83,7 @@ export function getApplicationRisk(app: Application): {
       level: 'completed',
       label: 'Completed',
       badgeVariant: 'success',
-      reason: 'Case workflow completed'
+      reason: 'Application workflow completed'
     };
   }
 

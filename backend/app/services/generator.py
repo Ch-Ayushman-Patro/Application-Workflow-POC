@@ -54,7 +54,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.OPEN,
-                current_role="Admin",
+                current_role=None,
                 current_stage="New Intake Queue",
                 created_at=created_at
             )
@@ -117,7 +117,7 @@ def generate_random_cases(db: Session, count: int = 3, run_workflow: bool = True
             app = Application(
                 application_number=app_num,
                 status=ApplicationStatus.OPEN,
-                current_role="Admin",
+                current_role=None,
                 current_stage="New Intake Queue",
                 created_at=created_at
             )

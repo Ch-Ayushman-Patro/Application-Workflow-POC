@@ -53,14 +53,18 @@ class WorkflowEngine:
                     if user and user.manager_user_id:
                         manager = self.db.query(User).filter(User.id == user.manager_user_id).first()
                     
-                    role = manager.role if manager else "Admin"
-                    assigned_to_user = manager.id if manager else None
-
-                    if self._create_task_if_not_exists(app.id, TaskType.ESCALATION, role, assigned_to_user, escalation_level=1):
-                        stats["tasks_created"] += 1
-                        stats["escalations_created"] += 1
+                    if not manager and user and user.role == "Admin":
+                        # Suppress meaningless escalations back to Admin if they are the owner and have no manager
+                        pass
                     else:
-                        stats["tasks_already_existing"] += 1
+                        role = manager.role if manager else "Admin"
+                        assigned_to_user = manager.id if manager else None
+
+                        if self._create_task_if_not_exists(app.id, TaskType.ESCALATION, role, assigned_to_user, escalation_level=1):
+                            stats["tasks_created"] += 1
+                            stats["escalations_created"] += 1
+                        else:
+                            stats["tasks_already_existing"] += 1
 
         return stats
 

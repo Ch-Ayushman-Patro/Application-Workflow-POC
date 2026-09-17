@@ -44,19 +44,18 @@ def calculate_summary(db: Session):
                 total_waiting += waiting
                 total_human_processing += processing
                 
-                stage = app.current_stage or app.current_role or "Unassigned"
-                stage_waiting[stage] = stage_waiting.get(stage, 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
             else:
                 waiting = (app_completed - app_created).total_seconds()
                 total_waiting += waiting
-                stage_waiting["Unassigned"] = stage_waiting.get("Unassigned", 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
 
         else:
             # For open apps, estimate current waiting/processing
             if app.status == ApplicationStatus.OPEN:
                 waiting = (now - app_created).total_seconds()
                 total_waiting += waiting
-                stage_waiting["Unassigned"] = stage_waiting.get("Unassigned", 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
             elif app.status == ApplicationStatus.CLAIMED:
                 app_claimed = app.claimed_at
                 if app_claimed.tzinfo is None:
@@ -66,8 +65,7 @@ def calculate_summary(db: Session):
                 total_waiting += waiting
                 total_human_processing += processing
                 
-                stage = app.current_stage or app.current_role or "Unassigned"
-                stage_waiting[stage] = stage_waiting.get(stage, 0) + waiting
+                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
 
     avg_processing = (total_human_processing / total) / 3600.0 if total > 0 else 0
     avg_waiting = (total_waiting / total) / 3600.0 if total > 0 else 0

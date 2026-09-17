@@ -48,7 +48,7 @@ import { useRole } from "../context/RoleContext";
  * Manager:  "my_team" (team apps) | "unclaimed" | "overdue" | "all" | "completed"
  * Underwriter: "my_cases" (only currentUser's) | "all" | "completed"
  * 
- * This ensures Underwriters cannot accidentally see each other's cases in the
+ * This ensures Underwriters cannot accidentally see each other's Applications in the
  * primary view without explicitly switching to "All Applications".
  */
 
@@ -108,7 +108,7 @@ export default function Applications() {
 
   const handleCompleteApp = async (appId: number) => {
     try {
-      await completeMutation.mutateAsync(appId);
+      await completeMutation.mutateAsync({ id: appId, actorId: currentUser.id });
     } catch (err) {
       console.error("Failed to complete application", err);
     }
@@ -123,7 +123,7 @@ export default function Applications() {
   const tabs: TabDef[] = (() => {
     if (currentRole === "Underwriter") {
       return [
-        { key: "my_cases", label: `My Cases (${scope.myApplications.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "my_cases", label: `My Applications (${scope.myApplications.length})`, activeColor: "bg-emerald-600 text-white" },
         { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
         { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
       ];
@@ -183,16 +183,16 @@ export default function Applications() {
   // ── Header copy ──────────────────────────────────────────────────────────
   const pageTitle =
     currentRole === "Underwriter"
-      ? `${currentUser.name.split(" ")[0]}'s Cases`
+      ? `${currentUser.name.split(" ")[0]}'s Applications`
       : currentRole === "Manager"
-      ? "Case Pipeline"
+      ? "Application Pipeline"
       : "All Applications";
 
   const pageSubtitle =
     currentRole === "Underwriter"
       ? `Manage your claimed applications. Switch to "All Applications" for full pipeline view.`
       : currentRole === "Manager"
-      ? `Monitor your team's cases and the overall application pipeline.`
+      ? `Monitor your team's Applications and the overall application pipeline.`
       : "View and manage all loan applications across the system.";
 
   return (
@@ -220,7 +220,7 @@ export default function Applications() {
       {currentRole === "Underwriter" && activeTab === "my_cases" && (
         <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          Showing cases claimed by <strong>{currentUser.name}</strong> only.
+          Showing Applications claimed by <strong>{currentUser.name}</strong> only.
         </div>
       )}
 
@@ -228,7 +228,7 @@ export default function Applications() {
       {currentRole === "Manager" && activeTab === "my_team" && (
         <div className="px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2">
           <UserCheck className="w-3.5 h-3.5 shrink-0" />
-          Showing cases owned by your direct reports ({scope.teamMembers.map((m) => m.name).join(", ") || "none"}).
+          Showing Applications owned by your direct reports ({scope.teamMembers.map((m) => m.name).join(", ") || "none"}).
         </div>
       )}
 
@@ -252,7 +252,7 @@ export default function Applications() {
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search case # or name..."
+            placeholder="Search application number or name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-400 focus:outline-none"
@@ -432,7 +432,7 @@ export default function Applications() {
       <Modal
         isOpen={!!claimTargetApp}
         onClose={() => setClaimTargetApp(null)}
-        title="Assign Case to Underwriter"
+        title="Assign Application to Underwriter"
         description={`Assign ${claimTargetApp?.application_number} to an Underwriter. The review SLA timer begins immediately.`}
         footer={
           <>
