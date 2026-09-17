@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.database import get_db
-from app.schemas.all import ApplicationResponse, EventResponse
+from app.schemas.all import ApplicationResponse, EventResponse, DecisionRequest
 from app.services import core
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
@@ -38,7 +38,29 @@ def complete_application(app_id: int, actor_id: int = Query(None), db: Session =
     return app
 
 
+@router.post("/{app_id}/decision", response_model=ApplicationResponse)
+def decide_application(
+    app_id: int,
+    request: Optional[DecisionRequest] = None,
+    decision: Optional[str] = Query(None),
+    actor_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    dec = request.decision if request and request.decision else decision
+    act = request.actor_id if request and request.actor_id is not None else actor_id
+    if not dec:
+        raise HTTPException(status_code=400, detail="Decision parameter ('APPROVED' or 'REJECTED') is required")
+    try:
+        app = core.decide_application(db, app_id, decision=dec, actor_id=act)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return app
+
+
 @router.get("/{app_id}/timeline", response_model=List[EventResponse])
 def get_application_timeline(app_id: int, db: Session = Depends(get_db)):
     return core.get_app_timeline(db, app_id)
+
 

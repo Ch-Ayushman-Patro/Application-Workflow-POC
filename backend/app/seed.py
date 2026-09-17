@@ -87,13 +87,14 @@ def seed_db():
             created_at=now - timedelta(hours=8),
             claimed_at=now - timedelta(hours=2)
         ),
-        # APP-1006: COMPLETED -> historical
+        # APP-1006: COMPLETED -> historical (APPROVED)
         Application(
             application_number="APP-1006",
             status=ApplicationStatus.COMPLETED,
+            decision="APPROVED",
             claimed_by_user_id=u_officer1.id,
             current_role=u_officer1.role,
-            current_stage="Completed",
+            current_stage="Approved",
             created_at=now - timedelta(days=5),
             claimed_at=now - timedelta(days=4),
             completed_at=now - timedelta(days=1)
@@ -126,24 +127,26 @@ def seed_db():
             created_at=now - timedelta(days=2.2),
             claimed_at=now - timedelta(days=1.4)
         ),
-        # APP-1010: COMPLETED -> historical
+        # APP-1010: COMPLETED -> historical (REJECTED)
         Application(
             application_number="APP-1010",
             status=ApplicationStatus.COMPLETED,
+            decision="REJECTED",
             claimed_by_user_id=u_officer2.id,
             current_role=u_officer2.role,
-            current_stage="Completed",
+            current_stage="Rejected",
             created_at=now - timedelta(days=4),
             claimed_at=now - timedelta(days=3.2),
             completed_at=now - timedelta(days=1.8)
         ),
-        # APP-1011: COMPLETED -> historical
+        # APP-1011: COMPLETED -> historical (APPROVED)
         Application(
             application_number="APP-1011",
             status=ApplicationStatus.COMPLETED,
+            decision="APPROVED",
             claimed_by_user_id=u_admin.id,
             current_role=u_admin.role,
-            current_stage="Completed",
+            current_stage="Approved",
             created_at=now - timedelta(days=6),
             claimed_at=now - timedelta(days=5.5),
             completed_at=now - timedelta(days=4.8)
@@ -180,12 +183,32 @@ def seed_db():
                 details=f"Claimed by {app.claimed_by.name if app.claimed_by else 'Underwriter'}"
             ))
         if app.completed_at:
-            db.add(ApplicationEvent(
-                application_id=app.id,
-                event_type="APPLICATION_COMPLETED",
-                timestamp=app.completed_at,
-                details=f"Application {app.application_number} finalized"
-            ))
+            if app.decision == "APPROVED":
+                actor_name = app.claimed_by.name if app.claimed_by else "Underwriter"
+                db.add(ApplicationEvent(
+                    application_id=app.id,
+                    event_type="APPLICATION_APPROVED",
+                    actor_id=app.claimed_by_user_id,
+                    timestamp=app.completed_at,
+                    details=f"Application {app.application_number} approved by {actor_name}"
+                ))
+            elif app.decision == "REJECTED":
+                actor_name = app.claimed_by.name if app.claimed_by else "Underwriter"
+                db.add(ApplicationEvent(
+                    application_id=app.id,
+                    event_type="APPLICATION_REJECTED",
+                    actor_id=app.claimed_by_user_id,
+                    timestamp=app.completed_at,
+                    details=f"Application {app.application_number} rejected by {actor_name}"
+                ))
+            else:
+                db.add(ApplicationEvent(
+                    application_id=app.id,
+                    event_type="APPLICATION_COMPLETED",
+                    actor_id=app.claimed_by_user_id,
+                    timestamp=app.completed_at,
+                    details=f"Application {app.application_number} finalized"
+                ))
             
     db.commit()
 

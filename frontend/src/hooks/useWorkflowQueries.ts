@@ -4,6 +4,7 @@ import {
   getApplication, 
   claimApplication, 
   completeApplication, 
+  decideApplication,
   getTimeline, 
   getTasks, 
   completeTask, 
@@ -106,6 +107,20 @@ export function useCompleteApplication() {
       queryClient.invalidateQueries({ queryKey: queryKeys.applications });
       queryClient.invalidateQueries({ queryKey: queryKeys.application(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.timeline(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.analytics });
+    },
+  });
+}
+
+export function useDecideApplication() {
+  return useMutation({
+    mutationFn: ({ id, decision, actorId }: { id: number; decision: 'APPROVED' | 'REJECTED'; actorId?: number }) =>
+      decideApplication(id, decision, actorId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.applications });
+      queryClient.invalidateQueries({ queryKey: queryKeys.application(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeline(variables.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
       queryClient.invalidateQueries({ queryKey: queryKeys.analytics });
     },

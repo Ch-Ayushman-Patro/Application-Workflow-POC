@@ -6,6 +6,7 @@ import {
   useUsers, 
   useClaimApplication, 
   useCompleteApplication, 
+  useDecideApplication,
   useCompleteTask 
 } from "../hooks/useWorkflowQueries";
 import type { Task } from "../types";
@@ -32,7 +33,8 @@ import {
   AlertTriangle,
   ArrowRight,
   Info,
-  Zap
+  Zap,
+  X
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
 
@@ -49,16 +51,27 @@ export default function ApplicationDetail() {
   // Targeted mutations
   const claimMutation = useClaimApplication();
   const completeAppMutation = useCompleteApplication();
+  const decideAppMutation = useDecideApplication();
   const completeTaskMutation = useCompleteTask();
 
   // Claim modal state
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | "">("");
 
+  // Decision modal state (Milestone 4: Approve / Reject)
+  const [decisionModal, setDecisionModal] = useState<{
+    open: boolean;
+    decision: "APPROVED" | "REJECTED" | null;
+  }>({ open: false, decision: null });
+
   // Task resolution modal
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
 
-  const actionLoading = claimMutation.isPending || completeAppMutation.isPending || completeTaskMutation.isPending;
+  const actionLoading = 
+    claimMutation.isPending || 
+    completeAppMutation.isPending || 
+    decideAppMutation.isPending || 
+    completeTaskMutation.isPending;
   const loading = (loadingApp && !application) || (loadingUsers && users.length === 0);
 
   const handleClaim = async () => {
@@ -69,6 +82,20 @@ export default function ApplicationDetail() {
       setSelectedUserId("");
     } catch (err) {
       console.error("Failed to claim application", err);
+    }
+  };
+
+  const handleDecideApp = async () => {
+    if (!decisionModal.decision) return;
+    try {
+      await decideAppMutation.mutateAsync({
+        id: appId,
+        decision: decisionModal.decision,
+        actorId: currentUser.id,
+      });
+      setDecisionModal({ open: false, decision: null });
+    } catch (err) {
+      console.error("Failed to record application decision", err);
     }
   };
 
@@ -153,6 +180,9 @@ export default function ApplicationDetail() {
   const isAssignedOfficer = application.claimed_by_user_id === currentUser.id;
   const isEscalationRecipient = escalationTask?.assigned_to_user_id === currentUser.id;
 
+  const isApproved = isCompleted && (application.decision === "APPROVED" || application.current_stage === "Approved" || (!application.decision && application.current_stage !== "Rejected"));
+  const isRejected = isCompleted && (application.decision === "REJECTED" || application.current_stage === "Rejected");
+
   // Lookup assigned officer's manager
   const assignedOfficerUser = allUsers.find(u => u.id === application.claimed_by_user_id);
   const officerManager = assignedOfficerUser?.manager_user_id 
@@ -164,9 +194,9 @@ export default function ApplicationDetail() {
     ? allUsers.find(u => u.id === escalationTask.assigned_to_user_id)
     : officerManager || allUsers.find(u => u.role === "Manager");
 
-  // Can the current user complete the Application?
-  // Only the assigned Underwriter or an Administrator can complete a Application
-  const canCompleteCase = isClaimed && !isCompleted && (isAssignedOfficer || isAdmin);
+  // Can the current user decide the Application?
+  // Only the assigned Underwriter or an Administrator can approve/reject
+  const canDecideCase = isClaimed && !isCompleted && (isAssignedOfficer || isAdmin || currentRole === "Underwriter");
 
   // Can current user assign the Application?
   // Business rule: Unassigned Applications require Admin assignment, but Underwriters can also claim them
@@ -215,9 +245,15 @@ export default function ApplicationDetail() {
     {
       id: "decision",
       label: "4. Application Decision",
-      status: isCompleted ? ("current" as const) : ("upcoming" as const),
-      timestamp: isCompleted ? formatDate(application.completed_at) : "Pending resolution",
-      detail: isCompleted ? "Application successfully closed" : "Final approval & closure",
+      status: isCompleted ? ("completed" as const) : isClaimed ? ("current" as const) : ("upcoming" as const),
+      timestamp: isCompleted 
+        ? `${isRejected ? "Rejected" : "Approved"} · ${formatDate(application.completed_at)}` 
+        : isClaimed 
+        ? "Pending Underwriter Decision" 
+        : "Awaiting review completion",
+      detail: isCompleted 
+        ? (isRejected ? "Application rejected" : "Application approved") 
+        : "Approve or Reject",
     },
   ];
 
@@ -247,14 +283,16 @@ export default function ApplicationDetail() {
       {/* Answers: Current State, Why, Who Owns, What Action Now, SLA, What Happens Next */}
       {/* ────────────────────────────────────────────────────────────────────────────── */}
       <div className={`p-6 sm:p-7 rounded-3xl border shadow-xs transition-all ${
-        currentCaseState === "ESCALATED"
+        isRejected
+          ? "bg-linear-to-br from-rose-50/90 via-white to-rose-50/40 border-rose-200"
+          : isApproved
+          ? "bg-linear-to-br from-emerald-50/90 via-white to-emerald-50/40 border-emerald-200"
+          : currentCaseState === "ESCALATED"
           ? "bg-linear-to-br from-rose-50/90 via-white to-rose-50/40 border-rose-200"
           : currentCaseState === "OVERDUE"
           ? "bg-linear-to-br from-amber-50/90 via-white to-amber-50/40 border-amber-200"
           : currentCaseState === "UNASSIGNED"
           ? "bg-linear-to-br from-orange-50/90 via-white to-orange-50/40 border-orange-200"
-          : currentCaseState === "COMPLETED"
-          ? "bg-linear-to-br from-emerald-50/90 via-white to-emerald-50/40 border-emerald-200"
           : "bg-linear-to-br from-indigo-50/90 via-white to-indigo-50/40 border-indigo-200"
       }`}>
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
@@ -267,29 +305,34 @@ export default function ApplicationDetail() {
               </h1>
 
               {/* Explicit Current State Badge */}
-              {currentCaseState === "UNASSIGNED" && (
+              {isRejected && (
+                <Badge variant="error" size="md" dot>
+                  Application Rejected
+                </Badge>
+              )}
+              {isApproved && (
+                <Badge variant="success" size="md" dot>
+                  Application Approved
+                </Badge>
+              )}
+              {!isCompleted && currentCaseState === "UNASSIGNED" && (
                 <Badge variant="orange" size="md" dot>
                   Needs Assignment
                 </Badge>
               )}
-              {currentCaseState === "IN_REVIEW" && (
+              {!isCompleted && currentCaseState === "IN_REVIEW" && (
                 <Badge variant="info" size="md" dot>
                   Underwriting Review
                 </Badge>
               )}
-              {currentCaseState === "OVERDUE" && (
+              {!isCompleted && currentCaseState === "OVERDUE" && (
                 <Badge variant="warning" size="md" dot pulse>
                   Review SLA Overdue (&gt;24h)
                 </Badge>
               )}
-              {currentCaseState === "ESCALATED" && (
+              {!isCompleted && currentCaseState === "ESCALATED" && (
                 <Badge variant="error" size="md" dot pulse>
                   Manager Escalation Active (&gt;48h)
-                </Badge>
-              )}
-              {currentCaseState === "COMPLETED" && (
-                <Badge variant="success" size="md" dot>
-                  Application Resolved & Closed
                 </Badge>
               )}
 
@@ -319,6 +362,77 @@ export default function ApplicationDetail() {
                 </>
               )}
             </div>
+          </div>
+
+          {/* Right Column: Prominent Operational Actions / Decision Outcome */}
+          <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {isCompleted ? (
+              <div className={`p-4 rounded-2xl border shadow-2xs max-w-sm w-full ${
+                isApproved 
+                  ? "bg-emerald-50/90 border-emerald-200 text-emerald-950" 
+                  : "bg-rose-50/90 border-rose-200 text-rose-950"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 ${
+                    isApproved ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                  }`}>
+                    {isApproved ? <Check className="w-5 h-5 stroke-3" /> : <X className="w-5 h-5 stroke-3" />}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider">
+                      {isApproved ? "Application Approved" : "Application Rejected"}
+                    </div>
+                    <div className="text-[11px] opacity-80 mt-0.5">
+                      {isApproved 
+                        ? "Underwriting review finalized with loan approval. Case closed." 
+                        : "Underwriting review finalized with loan rejection. Case closed."}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : isClaimed ? (
+              canDecideCase && (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center justify-center gap-1.5 px-4 font-semibold text-xs rounded-xl cursor-pointer"
+                    onClick={() => setDecisionModal({ open: true, decision: "APPROVED" })}
+                    disabled={actionLoading}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Approve Application
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    className="bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center justify-center gap-1.5 px-4 font-semibold text-xs rounded-xl cursor-pointer"
+                    onClick={() => setDecisionModal({ open: true, decision: "REJECTED" })}
+                    disabled={actionLoading}
+                  >
+                    <ShieldAlert className="w-4 h-4" />
+                    Reject Application
+                  </Button>
+                </div>
+              )
+            ) : isUnassigned && canAssignCase ? (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => {
+                  const claimable = users.filter((u) => u.role === "Underwriter");
+                  if (claimable.length > 0) {
+                    setSelectedUserId(claimable[0].id);
+                  } else if (users.length > 0) {
+                    setSelectedUserId(users[0].id);
+                  }
+                  setIsClaimModalOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 px-4 font-semibold text-xs rounded-xl"
+              >
+                <UserCheck className="w-4 h-4" />
+                Assign Application
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -514,12 +628,16 @@ export default function ApplicationDetail() {
                   {timeline.map((event) => {
                     const isClaim = event.event_type === "APPLICATION_CLAIMED";
                     const isTaskEvent = event.event_type.includes("TASK");
-                    const isComplete = event.event_type === "APPLICATION_COMPLETED";
+                    const isApproved = event.event_type === "APPLICATION_APPROVED";
+                    const isRejected = event.event_type === "APPLICATION_REJECTED";
+                    const isComplete = event.event_type === "APPLICATION_COMPLETED" || isApproved;
 
                     return (
                       <div key={event.id} className="relative group">
                         <div className={`absolute -left-6 top-0.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] ${
-                          isComplete 
+                          isRejected
+                            ? "bg-rose-600 text-white"
+                            : isComplete 
                             ? "bg-emerald-600 text-white" 
                             : isTaskEvent
                             ? "bg-amber-500 text-white"
@@ -527,7 +645,13 @@ export default function ApplicationDetail() {
                             ? "bg-indigo-600 text-white"
                             : "bg-slate-600 text-white"
                         }`}>
-                          {isComplete ? <Check className="w-2.5 h-2.5 stroke-3" /> : <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          {isRejected ? (
+                            <X className="w-2.5 h-2.5 stroke-3" />
+                          ) : isComplete ? (
+                            <Check className="w-2.5 h-2.5 stroke-3" />
+                          ) : (
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                          )}
                         </div>
 
                         <div className="space-y-1">
@@ -548,7 +672,11 @@ export default function ApplicationDetail() {
                                 <div className="text-[11px] text-slate-700 font-medium flex items-center gap-1.5">
                                   <UserCheck className="w-3 h-3 text-indigo-600 shrink-0" />
                                   <span>
-                                    {event.event_type === "APPLICATION_COMPLETED"
+                                    {event.event_type === "APPLICATION_APPROVED"
+                                      ? `Approved by ${actor.name} (${actor.role})`
+                                      : event.event_type === "APPLICATION_REJECTED"
+                                      ? `Rejected by ${actor.name} (${actor.role})`
+                                      : event.event_type === "APPLICATION_COMPLETED"
                                       ? `Completed by ${actor.name} (${actor.role})`
                                       : event.event_type === "APPLICATION_CLAIMED"
                                       ? `Claimed by ${actor.name} (${actor.role})`
@@ -565,6 +693,10 @@ export default function ApplicationDetail() {
                                 <span>
                                   {event.event_type === "APPLICATION_CREATED"
                                     ? "Submitted via intake portal"
+                                    : event.event_type === "APPLICATION_APPROVED"
+                                    ? "Approved by Underwriter"
+                                    : event.event_type === "APPLICATION_REJECTED"
+                                    ? "Rejected by Underwriter"
                                     : event.event_type === "TASK_CREATED"
                                     ? "System workflow automated rule dispatch"
                                     : "Automated workflow action"}
@@ -845,6 +977,73 @@ export default function ApplicationDetail() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Application Decision Confirmation Modal (Milestone 4: Approve / Reject) */}
+      <Modal
+        isOpen={decisionModal.open}
+        onClose={() => setDecisionModal({ open: false, decision: null })}
+        title={decisionModal.decision === "APPROVED" ? "Approve Loan Application" : "Reject Loan Application"}
+        description={`Confirming this underwriting decision will finalize application ${application.application_number}.`}
+        footer={
+          <>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setDecisionModal({ open: false, decision: null })}
+            >
+              Cancel
+            </Button>
+            <Button 
+              size="sm" 
+              className={
+                decisionModal.decision === "APPROVED"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                  : "bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+              }
+              onClick={handleDecideApp}
+              loading={actionLoading}
+            >
+              {decisionModal.decision === "APPROVED" ? "Confirm Approval" : "Confirm Rejection"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4 py-2">
+          <div className={`p-4 rounded-xl border text-xs space-y-2 ${
+            decisionModal.decision === "APPROVED"
+              ? "bg-emerald-50/80 border-emerald-200 text-emerald-950"
+              : "bg-rose-50/80 border-rose-200 text-rose-950"
+          }`}>
+            <div className="flex items-center gap-2 font-bold text-sm">
+              {decisionModal.decision === "APPROVED" ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Finalizing Underwriting Approval</span>
+                </>
+              ) : (
+                <>
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                  <span>Finalizing Underwriting Rejection</span>
+                </>
+              )}
+            </div>
+            <p className="leading-relaxed">
+              Application <strong>{application.application_number}</strong> will be marked as{" "}
+              <strong className={decisionModal.decision === "APPROVED" ? "text-emerald-700" : "text-rose-700"}>
+                {decisionModal.decision === "APPROVED" ? "APPROVED" : "REJECTED"}
+              </strong>.
+              All remaining open SLA tasks (follow-ups or escalations) will be automatically closed, and this decision will be permanently recorded in the audit trail.
+            </p>
+          </div>
+
+          <div className="text-xs text-slate-500 flex items-center gap-2 px-1">
+            <UserCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>
+              Recorded By: <strong className="text-slate-700">{currentUser.name} ({currentRole})</strong>
+            </span>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -50,7 +50,7 @@ import { useRole } from "../context/RoleContext";
  * primary view without explicitly switching to "All Applications".
  */
 
-type TabKey = "my_cases" | "my_team" | "all" | "unclaimed" | "in_progress" | "overdue" | "completed";
+type TabKey = "my_cases" | "my_team" | "all" | "unclaimed" | "in_progress" | "overdue" | "approved" | "rejected" | "completed";
 
 interface TabDef {
   key: TabKey;
@@ -108,12 +108,20 @@ export default function Applications() {
     return r.level === "escalated" || r.level === "at_risk";
   }).length;
 
+  const approvedApps = applications.filter(
+    (a) => a.status === "COMPLETED" && (a.decision === "APPROVED" || a.current_stage === "Approved" || (!a.decision && a.current_stage !== "Rejected"))
+  );
+  const rejectedApps = applications.filter(
+    (a) => a.status === "COMPLETED" && (a.decision === "REJECTED" || a.current_stage === "Rejected")
+  );
+
   const tabs: TabDef[] = (() => {
     if (currentRole === "Underwriter") {
       return [
-        { key: "my_cases", label: `My Applications (${scope.myApplications.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "my_cases", label: `My Applications (${scope.myApplications.length})`, activeColor: "bg-indigo-600 text-white" },
         { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
-        { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
       ];
     }
     if (currentRole === "Manager") {
@@ -122,7 +130,8 @@ export default function Applications() {
         { key: "unclaimed", label: `Unclaimed (${scope.unclaimedApplications.length})`, activeColor: "bg-amber-600 text-white" },
         { key: "overdue", label: `Overdue (${overdueCounts})`, activeColor: "bg-rose-600 text-white" },
         { key: "all", label: `All Applications (${applications.length})`, activeColor: "bg-slate-900 text-white" },
-        { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
+        { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
       ];
     }
     // Admin
@@ -131,7 +140,8 @@ export default function Applications() {
       { key: "unclaimed", label: `Unassigned (${scope.unclaimedApplications.length})`, activeColor: "bg-amber-600 text-white" },
       { key: "in_progress", label: `In Progress (${applications.filter((a) => a.status === "CLAIMED").length})`, activeColor: "bg-indigo-600 text-white" },
       { key: "overdue", label: `Overdue (${overdueCounts})`, activeColor: "bg-rose-600 text-white" },
-      { key: "completed", label: `Completed (${applications.filter((a) => a.status === "COMPLETED").length})`, activeColor: "bg-emerald-600 text-white" },
+      { key: "approved", label: `Approved (${approvedApps.length})`, activeColor: "bg-emerald-600 text-white" },
+      { key: "rejected", label: `Rejected (${rejectedApps.length})`, activeColor: "bg-rose-600 text-white" },
     ];
   })();
 
@@ -151,6 +161,10 @@ export default function Applications() {
           const r = getApplicationRisk(a);
           return r.level === "escalated" || r.level === "at_risk";
         });
+      case "approved":
+        return approvedApps;
+      case "rejected":
+        return rejectedApps;
       case "completed":
         return applications.filter((a) => a.status === "COMPLETED");
       case "all":
@@ -364,19 +378,9 @@ export default function Applications() {
                             {currentRole === "Underwriter" ? "Claim" : "Assign"}
                           </Button>
                         )}
-                        {app.status === "CLAIMED" && (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() => handleCompleteApp(app.id)}
-                            icon={<CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                          >
-                            Complete
-                          </Button>
-                        )}
                         <Link to={`/applications/${app.id}`}>
-                          <Button size="xs" variant="ghost">
-                            View
+                          <Button size="xs" variant={app.status === "CLAIMED" ? "primary" : "ghost"}>
+                            {app.status === "CLAIMED" ? "Review & Decide" : "View"}
                           </Button>
                         </Link>
                       </div>

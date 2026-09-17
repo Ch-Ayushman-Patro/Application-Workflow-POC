@@ -11,6 +11,8 @@ def calculate_summary(db: Session):
     open_apps = sum(1 for a in apps if a.status == ApplicationStatus.OPEN)
     claimed = sum(1 for a in apps if a.status == ApplicationStatus.CLAIMED)
     completed = sum(1 for a in apps if a.status == ApplicationStatus.COMPLETED)
+    approved_apps = sum(1 for a in apps if a.decision == "APPROVED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "APPROVED"))
+    rejected_apps = sum(1 for a in apps if a.decision == "REJECTED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "REJECTED"))
     
     pending_action = len([t for t in tasks if t.status == "OPEN"])
     total_escalations = sum(1 for t in tasks if t.task_type == TaskType.ESCALATION)
@@ -79,6 +81,8 @@ def calculate_summary(db: Session):
         "open_applications": open_apps,
         "claimed_applications": claimed,
         "completed_applications": completed,
+        "approved_applications": approved_apps,
+        "rejected_applications": rejected_apps,
         "pending_action": pending_action,
         "avg_processing_time_hours": avg_processing,
         "avg_waiting_time_hours": avg_waiting,
