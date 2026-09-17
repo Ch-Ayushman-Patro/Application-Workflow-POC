@@ -181,9 +181,9 @@ export default function Applications() {
 
   const pageSubtitle =
     currentRole === "Underwriter"
-      ? `Manage your claimed applications. Switch to "All Applications" for full pipeline view.`
+      ? `Manage your claimed applications.`
       : currentRole === "Manager"
-      ? `Monitor your team's Applications and the overall application pipeline.`
+      ? `Monitor your team's Applications.`
       : "View and manage all loan applications across the system.";
 
   return (
