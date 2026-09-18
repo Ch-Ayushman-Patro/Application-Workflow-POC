@@ -24,7 +24,7 @@ def run_workflow(db: Session = Depends(get_db)):
 
 @router.post("/demo/simulate-inflow")
 def simulate_inflow(
-    count: int = Query(3, ge=1, le=20, description="Number of applications to simulate"),
+    count: int = Query(50, ge=1, le=100, description="Number of applications to simulate"),
     run_workflow: bool = Query(True, description="Whether to evaluate workflow rules immediately"),
     db: Session = Depends(get_db)
 ):
