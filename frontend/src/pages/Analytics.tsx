@@ -197,26 +197,6 @@ export default function Analytics() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Process Intelligence</h2>
-            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
-              Admin Supervisory
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            Diagnose pipeline throughput, identify queue bottlenecks, and investigate why loan applications are breaching SLAs.
-          </p>
-        </div>
-        <Link to="/applications">
-          <Button variant="outline" size="sm" icon={<ArrowUpRight className="w-3.5 h-3.5" />}>
-            View All Applications
-          </Button>
-        </Link>
-      </div>
-
       {/* SECTION 1: Overall Pipeline Health */}
       <div>
         <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
