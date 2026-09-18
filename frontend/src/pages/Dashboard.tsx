@@ -166,7 +166,7 @@ function AdminDashboard() {
                       {scope.adminActionTasks.length} Application{scope.adminActionTasks.length > 1 ? "s" : ""} need underwriter assignment
                     </div>
                     <div className="text-xs text-slate-500">
-                      Unclaimed for &gt;24 hours - ASSIGNMENT tasks pending
+                      Unclaimed for &gt; 24 hours - ASSIGNMENT pending
                     </div>
                   </div>
                 </div>
@@ -186,11 +186,11 @@ function AdminDashboard() {
         </div>
       </div>
 
-      {/* Unassigned backlog */}
+      {/* Unassigned backlog of applications */}
       {scope.unclaimedApplications.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <SectionHeading>Unassigned Backlog</SectionHeading>
+            <SectionHeading>Unassigned Backlog (PRIORITY ASSIGNMENT REQUIRED) </SectionHeading>
             <Link to="/applications" className="text-xs text-indigo-600 hover:underline font-medium">
               View all →
             </Link>
@@ -200,20 +200,23 @@ function AdminDashboard() {
               <ApplicationRow key={app.id} app={app} />
             ))}
             {scope.unclaimedApplications.length > 4 && (
-              <div className="px-4 py-3 text-xs text-slate-500 text-center">
-                +{scope.unclaimedApplications.length - 4} more unassigned Applications
-              </div>
+              <Link
+                to="/applications?tab=unassigned"
+                className="block px-4 py-3 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 font-semibold text-center transition-colors cursor-pointer"
+              >
+                +{scope.unclaimedApplications.length - 4} more unassigned Applications →
+              </Link>
             )}
           </div>
         </div>
       )}
 
-      {/* Priority Applications */}
+      {/* Delayed Applications */}
       {urgentCases.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <SectionHeading>Priority Applications</SectionHeading>
-            <Link to="/applications?filter=Delayed" className="text-xs text-indigo-600 hover:underline font-medium">
+            <SectionHeading>Delayed Applications (Requires Priority from Underwriters)</SectionHeading>
+            <Link to="/applications?tab=delayed" className="text-xs text-indigo-600 hover:underline font-medium">
               View all →
             </Link>
           </div>
@@ -221,6 +224,14 @@ function AdminDashboard() {
             {urgentCases.map((app) => (
               <ApplicationRow key={app.id} app={app} />
             ))}
+            {scope.allDelayedApplications.length > 5 && (
+              <Link
+                to="/applications?tab=delayed"
+                className="block px-4 py-3 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 font-semibold text-center transition-colors cursor-pointer"
+              >
+                +{scope.allDelayedApplications.length - 5} more priority Applications →
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -286,10 +297,64 @@ function ManagerDashboard() {
         <KpiCard label="Team Tasks" value={allTeamTasks.length} sub="Open action items" accent={allTeamTasks.length > 0 ? "amber" : "slate"} />
       </div>
 
+      {/* Team Underwriter Overview */}
+      {underwriterStats.length > 0 && (
+        <div>
+          <SectionHeading>Team Overview</SectionHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {underwriterStats.map(({ underwriter, activeCases, DelayedCases, underwriterTasks }) => (
+              <div key={underwriter.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Link
+                    to={`/applications?underwriter=${underwriter.id}`}
+                    className="flex items-center gap-3 group hover:opacity-90 transition-opacity"
+                    title={`View ${underwriter.name}'s applications`}
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0 group-hover:bg-emerald-200 transition-colors">
+                      {underwriter.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors flex items-center gap-1">
+                        {underwriter.name}
+                        <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity" />
+                      </div>
+                      <div className="text-[11px] text-slate-500">{underwriter.role}</div>
+                    </div>
+                  </Link>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-slate-50 rounded-xl p-2.5">
+                    <div className="text-lg font-bold text-slate-900">{activeCases.length}</div>
+                    <div className="text-[10px] text-slate-500">Active</div>
+                  </div>
+                  <div className={`rounded-xl p-2.5 ${DelayedCases.length > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
+                    <div className={`text-lg font-bold ${DelayedCases.length > 0 ? "text-rose-600" : "text-slate-900"}`}>
+                      {DelayedCases.length}
+                    </div>
+                    <div className="text-[10px] text-slate-500">Delayed</div>
+                  </div>
+                  <div className={`rounded-xl p-2.5 ${underwriterTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+                    <div className={`text-lg font-bold ${underwriterTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
+                      {underwriterTasks.length}
+                    </div>
+                    <div className="text-[10px] text-slate-500">Tasks</div>
+                  </div>
+                </div>
+                <Link to={`/applications?underwriter=${underwriter.id}`} className="block">
+                  <Button variant="outline" size="xs" className="w-full" icon={<ChevronRight className="w-3 h-3" />}>
+                    View Applications
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* My Escalations */}
       {teamEscalations.length > 0 && (
         <div>
-          <SectionHeading>My Escalations</SectionHeading>
+          <SectionHeading>Escalated Applications</SectionHeading>
           <div className="bg-rose-50 border border-rose-200 rounded-2xl divide-y divide-rose-100">
             {teamEscalations.map((task) => (
               <div key={task.id} className="flex items-center justify-between p-4">
@@ -313,63 +378,27 @@ function ManagerDashboard() {
         </div>
       )}
 
-      {/* Team Underwriter Overview */}
-      {underwriterStats.length > 0 && (
-        <div>
-          <SectionHeading>Team Overview</SectionHeading>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {underwriterStats.map(({ underwriter, activeCases, DelayedCases, underwriterTasks }) => (
-              <div key={underwriter.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
-                    {underwriter.name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">{underwriter.name}</div>
-                    <div className="text-[11px] text-slate-500">{underwriter.role}</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-slate-50 rounded-xl p-2.5">
-                    <div className="text-lg font-bold text-slate-900">{activeCases.length}</div>
-                    <div className="text-[10px] text-slate-500">Active</div>
-                  </div>
-                  <div className={`rounded-xl p-2.5 ${DelayedCases.length > 0 ? "bg-rose-50" : "bg-slate-50"}`}>
-                    <div className={`text-lg font-bold ${DelayedCases.length > 0 ? "text-rose-600" : "text-slate-900"}`}>
-                      {DelayedCases.length}
-                    </div>
-                    <div className="text-[10px] text-slate-500">Delayed</div>
-                  </div>
-                  <div className={`rounded-xl p-2.5 ${underwriterTasks.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
-                    <div className={`text-lg font-bold ${underwriterTasks.length > 0 ? "text-amber-600" : "text-slate-900"}`}>
-                      {underwriterTasks.length}
-                    </div>
-                    <div className="text-[10px] text-slate-500">Tasks</div>
-                  </div>
-                </div>
-                {DelayedCases.length > 0 && (
-                  <Link to="/applications" className="block">
-                    <Button variant="outline" size="xs" className="w-full" icon={<ChevronRight className="w-3 h-3" />}>
-                      View Applications
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Team Delayed Applications */}
       {scope.teamDelayedApplications.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <SectionHeading>Team Applications Needing Attention</SectionHeading>
+            <Link to="/applications?tab=delayed" className="text-xs text-indigo-600 hover:underline font-medium">
+              View all →
+            </Link>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
             {scope.teamDelayedApplications.slice(0, 5).map((app) => (
               <ApplicationRow key={app.id} app={app} />
             ))}
+            {scope.teamDelayedApplications.length > 5 && (
+              <Link
+                to="/applications?tab=delayed"
+                className="block px-4 py-3 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 font-semibold text-center transition-colors cursor-pointer"
+              >
+                + {scope.teamDelayedApplications.length - 5} more team Applications →
+              </Link>
+            )}
           </div>
         </div>
       )}
