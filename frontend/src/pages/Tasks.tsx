@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   ArrowUpRight,
   InboxIcon,
-  Filter,
 } from "lucide-react";
 import { useRole } from "../context/RoleContext";
 
@@ -69,32 +68,6 @@ const taskTypeSLAContext = (type: string) => {
  */
 
 type ScopeKey = "my_action" | "my_tasks" | "team_tasks" | "all";
-
-interface ScopeOption {
-  key: ScopeKey;
-  label: string;
-}
-
-function getScopeOptions(role: string): ScopeOption[] {
-  if (role === "Admin") {
-    return [
-      { key: "my_action", label: "Needs My Action" },
-      { key: "all", label: "All Tasks" },
-    ];
-  }
-  if (role === "Manager") {
-    return [
-      { key: "my_tasks", label: "My Tasks" },
-      { key: "team_tasks", label: "Team Tasks" },
-      { key: "all", label: "All Operations" },
-    ];
-  }
-  // Underwriter
-  return [
-    { key: "my_tasks", label: "My Tasks" },
-    { key: "all", label: "All Operations" },
-  ];
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Task Row
@@ -206,7 +179,7 @@ export default function Tasks() {
   const scope = useUserScope();
 
   const [activeTab, setActiveTab] = useState<"OPEN" | "COMPLETED">("OPEN");
-  const [selectedScope, setSelectedScope] = useState<ScopeKey>(() =>
+  const [selectedScope] = useState<ScopeKey>(() =>
     currentRole === "Admin" ? "my_action" : "my_tasks"
   );
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -256,15 +229,6 @@ export default function Tasks() {
 
   const displayedTasks = activeTab === "OPEN" ? scopedOpenTasks : completedTasks;
   const escalationCount = openTasks.filter((t) => t.task_type === "ESCALATION").length;
-  const scopeOptions = getScopeOptions(currentRole);
-
-  // Scope-aware badge counts
-  const scopeCounts: Partial<Record<ScopeKey, number>> = {
-    my_action: scope.adminActionTasks.length,
-    my_tasks: scope.myTasks.length,
-    team_tasks: scope.teamTasks.length,
-    all: openTasks.length,
-  };
 
   // Titles
   const pageTitle =
@@ -313,7 +277,7 @@ export default function Tasks() {
               activeTab === "OPEN" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Open ({openTasks.length})
+            Open
           </button>
           <button
             onClick={() => setActiveTab("COMPLETED")}
@@ -323,41 +287,9 @@ export default function Tasks() {
                 : "text-slate-600 hover:bg-slate-100"
             }`}
           >
-            Resolved ({completedTasks.length})
+            Resolved
           </button>
         </div>
-
-        {activeTab === "OPEN" && (
-          <div className="flex items-center gap-1.5 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 text-xs">
-            <span className="text-slate-400 flex items-center gap-1 text-[11px] font-medium mr-1">
-              <Filter className="w-3 h-3" /> Scope:
-            </span>
-            {scopeOptions.map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => setSelectedScope(opt.key)}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer whitespace-nowrap ${
-                  selectedScope === opt.key
-                    ? "bg-indigo-50 text-indigo-700 font-bold border border-indigo-200"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                {opt.label}
-                {scopeCounts[opt.key] !== undefined && (
-                  <span
-                    className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                      selectedScope === opt.key
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {scopeCounts[opt.key]}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Task Table */}
