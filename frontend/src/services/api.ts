@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Application, Task, User, AnalyticsSummary, ApplicationEvent, WorkflowRunResponse } from '../types';
+import type { Application, Task, User, AnalyticsOverview, AnalyticsTime, AnalyticsSla, AnalyticsWorkload, AnalyticsTrends, AnalyticsInsightsResponse, ApplicationEvent, WorkflowRunResponse } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -29,4 +29,10 @@ export const simulateInflow = (count: number = 3, runWorkflow: boolean = true) =
   ).then(res => res.data);
 
 export const resetAndSeed = () => api.post('/demo/reset-and-seed').then(res => res.data);
-export const getAnalyticsSummary = () => api.get<AnalyticsSummary>('/analytics/summary').then(res => res.data);
+
+export const getAnalyticsOverview = () => api.get<AnalyticsOverview>('/analytics/overview').then(res => res.data);
+export const getAnalyticsTime = () => api.get<AnalyticsTime>('/analytics/time').then(res => res.data);
+export const getAnalyticsSla = () => api.get<AnalyticsSla>('/analytics/sla').then(res => res.data);
+export const getAnalyticsWorkload = () => api.get<AnalyticsWorkload>('/analytics/workload').then(res => res.data);
+export const getAnalyticsTrends = () => api.get<AnalyticsTrends>('/analytics/trends').then(res => res.data);
+export const getAnalyticsInsights = () => api.get<AnalyticsInsightsResponse>('/analytics/insights').then(res => res.data);

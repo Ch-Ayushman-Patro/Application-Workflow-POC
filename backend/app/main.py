@@ -5,7 +5,7 @@ from app.api.applications import router as applications_router
 from app.api.tasks import router as tasks_router
 from app.api.users import router as users_router
 from app.api.workflow import router as workflow_router
-from app.api.analytics import router as analytics_router
+from app.api.analytics.router import router as analytics_router
 from app.database import engine, Base
 import app.models.all
 

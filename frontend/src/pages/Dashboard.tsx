@@ -4,7 +4,7 @@ import type { Application } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Skeleton } from "../components/ui/Skeleton";
-import { getApplicationRisk, formatElapsedTime, formatRelativeTime } from "../utils/formatters";
+import { getApplicationRisk, formatElapsedTime, formatRelativeTime, getApplicationAgeHours } from "../utils/formatters";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -114,6 +114,11 @@ function AdminDashboard() {
       ? Math.round((completedCount / scope.allApplications.length) * 100)
       : 0;
 
+  // Unassigned applications delayed beyond 24h SLA
+  const delayedUnclaimedApplications = scope.unclaimedApplications.filter(
+    (a) => getApplicationAgeHours(a.created_at) > 24
+  );
+
   // Top urgent Applications — escalated first, then at-risk, then attention
   const urgentCases = scope.allDelayedApplications.slice(0, 5);
 
@@ -191,7 +196,7 @@ function AdminDashboard() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <SectionHeading>Unassigned Backlog (PRIORITY ASSIGNMENT REQUIRED) </SectionHeading>
-            <Link to="/applications" className="text-xs text-indigo-600 hover:underline font-medium">
+            <Link to="/applications?tab=assignment_delayed" className="text-xs text-indigo-600 hover:underline font-medium">
               View all →
             </Link>
           </div>
@@ -199,14 +204,21 @@ function AdminDashboard() {
             {scope.unclaimedApplications.slice(0, 4).map((app) => (
               <ApplicationRow key={app.id} app={app} />
             ))}
-            {scope.unclaimedApplications.length > 4 && (
+            {delayedUnclaimedApplications.length > 4 ? (
+              <Link
+                to="/applications?tab=assignment_delayed"
+                className="block px-4 py-3 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 font-semibold text-center transition-colors cursor-pointer"
+              >
+                +{delayedUnclaimedApplications.length - 4} more delayed unassigned Applications →
+              </Link>
+            ) : scope.unclaimedApplications.length > 4 ? (
               <Link
                 to="/applications?tab=unassigned"
                 className="block px-4 py-3 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 font-semibold text-center transition-colors cursor-pointer"
               >
                 +{scope.unclaimedApplications.length - 4} more unassigned Applications →
               </Link>
-            )}
+            ) : null}
           </div>
         </div>
       )}
@@ -215,7 +227,14 @@ function AdminDashboard() {
       {urgentCases.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <SectionHeading>Delayed Applications (Requires Priority from Underwriters)</SectionHeading>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Delayed Applications
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Applications requiring attention based on their current SLA state.
+              </p>
+            </div>
             <Link to="/applications?tab=delayed" className="text-xs text-indigo-600 hover:underline font-medium">
               View all →
             </Link>
@@ -229,7 +248,7 @@ function AdminDashboard() {
                 to="/applications?tab=delayed"
                 className="block px-4 py-3 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-slate-50 font-semibold text-center transition-colors cursor-pointer"
               >
-                +{scope.allDelayedApplications.length - 5} more priority Applications →
+                +{scope.allDelayedApplications.length - 5} more delayed Applications →
               </Link>
             )}
           </div>

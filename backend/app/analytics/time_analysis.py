@@ -1,106 +1,57 @@
 import logging
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from app.models.all import Application, Task, ApplicationStatus, TaskType, ApplicationEvent
+from app.models.all import Application, ApplicationStatus
 from datetime import datetime, timezone
+import statistics
 
 logger = logging.getLogger(__name__)
 
-
-def calculate_summary(db: Session):
-    logger.info("Calculating analytics summary.")
+def get_time(db: Session):
     apps = db.query(Application).all()
-    tasks = db.query(Task).all()
-
-    total = len(apps)
-    open_apps = sum(1 for a in apps if a.status == ApplicationStatus.OPEN)
-    claimed = sum(1 for a in apps if a.status == ApplicationStatus.CLAIMED)
-    completed = sum(1 for a in apps if a.status == ApplicationStatus.COMPLETED)
-    approved_apps = sum(1 for a in apps if a.decision == "APPROVED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "APPROVED"))
-    rejected_apps = sum(1 for a in apps if a.decision == "REJECTED" or (a.status == ApplicationStatus.COMPLETED and a.decision == "REJECTED"))
-
-    pending_action = len([t for t in tasks if t.status == "OPEN"])
-    total_escalations = sum(1 for t in tasks if t.task_type == TaskType.ESCALATION)
-
-    logger.info(
-        "Counts — total=%d open=%d claimed=%d completed=%d approved=%d rejected=%d pending_action=%d escalations=%d.",
-        total, open_apps, claimed, completed, approved_apps, rejected_apps, pending_action, total_escalations
-    )
-
-    total_human_processing = 0
-    total_waiting = 0
-    completed_apps_count = 0
-
     now = datetime.now(timezone.utc)
+    
+    total_elapsed = []
+    queue_wait = []
+    review_duration = []
 
-    stage_waiting = {}
-
-    for app in apps:
-        app_created = app.created_at
-        if app_created.tzinfo is None:
-            app_created = app_created.replace(tzinfo=timezone.utc)
-
-        if app.status == ApplicationStatus.COMPLETED:
-            completed_apps_count += 1
-            app_completed = app.completed_at
-            if app_completed.tzinfo is None:
-                app_completed = app_completed.replace(tzinfo=timezone.utc)
-
-            if app.claimed_at:
-                app_claimed = app.claimed_at
-                if app_claimed.tzinfo is None:
-                    app_claimed = app_claimed.replace(tzinfo=timezone.utc)
-
-                waiting = (app_claimed - app_created).total_seconds()
-                processing = (app_completed - app_claimed).total_seconds()
-                total_waiting += waiting
-                total_human_processing += processing
-
-                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
+    for a in apps:
+        c_at = a.created_at.replace(tzinfo=timezone.utc) if a.created_at.tzinfo is None else a.created_at
+        
+        if a.claimed_at:
+            cl_at = a.claimed_at.replace(tzinfo=timezone.utc) if a.claimed_at.tzinfo is None else a.claimed_at
+            queue_wait.append((cl_at - c_at).total_seconds() / 3600.0)
+            
+            if a.status == ApplicationStatus.COMPLETED and a.completed_at:
+                comp_at = a.completed_at.replace(tzinfo=timezone.utc) if a.completed_at.tzinfo is None else a.completed_at
+                review_duration.append((comp_at - cl_at).total_seconds() / 3600.0)
+                total_elapsed.append((comp_at - c_at).total_seconds() / 3600.0)
             else:
-                waiting = (app_completed - app_created).total_seconds()
-                total_waiting += waiting
-                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
-
+                review_duration.append((now - cl_at).total_seconds() / 3600.0)
+                total_elapsed.append((now - c_at).total_seconds() / 3600.0)
         else:
-            # For open apps, estimate current waiting/processing
-            if app.status == ApplicationStatus.OPEN:
-                waiting = (now - app_created).total_seconds()
-                total_waiting += waiting
-                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
-            elif app.status == ApplicationStatus.CLAIMED:
-                app_claimed = app.claimed_at
-                if app_claimed.tzinfo is None:
-                    app_claimed = app_claimed.replace(tzinfo=timezone.utc)
-                waiting = (app_claimed - app_created).total_seconds()
-                processing = (now - app_claimed).total_seconds()
-                total_waiting += waiting
-                total_human_processing += processing
+            if a.status == ApplicationStatus.COMPLETED and a.completed_at:
+                comp_at = a.completed_at.replace(tzinfo=timezone.utc) if a.completed_at.tzinfo is None else a.completed_at
+                queue_wait.append((comp_at - c_at).total_seconds() / 3600.0)
+                total_elapsed.append((comp_at - c_at).total_seconds() / 3600.0)
+            else:
+                queue_wait.append((now - c_at).total_seconds() / 3600.0)
+                total_elapsed.append((now - c_at).total_seconds() / 3600.0)
 
-                stage_waiting["Intake Queue"] = stage_waiting.get("Intake Queue", 0) + waiting
-
-    avg_processing = (total_human_processing / total) / 3600.0 if total > 0 else 0
-    avg_waiting = (total_waiting / total) / 3600.0 if total > 0 else 0
-
-    bottleneck_stage = "None"
-    if stage_waiting:
-        bottleneck_stage = max(stage_waiting, key=stage_waiting.get)
-
-    logger.info(
-        "Summary computed — avg_processing=%.2fh avg_waiting=%.2fh bottleneck='%s'.",
-        avg_processing, avg_waiting, bottleneck_stage
-    )
+    avg_total = statistics.mean(total_elapsed) if total_elapsed else 0
+    avg_queue = statistics.mean(queue_wait) if queue_wait else 0
+    avg_rev = statistics.mean(review_duration) if review_duration else 0
+    
+    sum_queue = sum(queue_wait)
+    sum_rev = sum(review_duration)
+    total_time_sum = sum_queue + sum_rev
+    
+    q_pct = (sum_queue / total_time_sum * 100) if total_time_sum > 0 else 0
+    r_pct = (sum_rev / total_time_sum * 100) if total_time_sum > 0 else 0
 
     return {
-        "total_applications": total,
-        "open_applications": open_apps,
-        "claimed_applications": claimed,
-        "completed_applications": completed,
-        "approved_applications": approved_apps,
-        "rejected_applications": rejected_apps,
-        "pending_action": pending_action,
-        "avg_processing_time_hours": avg_processing,
-        "avg_waiting_time_hours": avg_waiting,
-        "total_escalations": total_escalations,
-        "bottleneck_stage": bottleneck_stage
+        "avg_total_elapsed_hours": avg_total,
+        "avg_queue_wait_hours": avg_queue,
+        "avg_review_duration_hours": avg_rev,
+        "queue_waiting_percentage": q_pct,
+        "active_review_percentage": r_pct
     }

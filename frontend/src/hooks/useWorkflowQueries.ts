@@ -12,7 +12,7 @@ import {
   runWorkflow, 
   simulateInflow, 
   resetAndSeed, 
-  getAnalyticsSummary 
+  getAnalyticsOverview, getAnalyticsTime, getAnalyticsSla, getAnalyticsWorkload, getAnalyticsTrends, getAnalyticsInsights 
 } from '../services/api';
 import { queryClient, queryKeys, cacheConfig } from '../services/queryClient';
 
@@ -62,19 +62,6 @@ export function useUsers() {
   });
 }
 
-/**
- * Analytics query - STRICTLY gated to Admin role via `enabled` parameter.
- * Non-admin roles should pass `enabled: false` to guarantee no HTTP call is ever made.
- */
-export function useAnalyticsSummary(options?: { enabled?: boolean }) {
-  const isEnabled = options?.enabled ?? true;
-  return useQuery({
-    queryKey: queryKeys.analytics,
-    queryFn: getAnalyticsSummary,
-    enabled: isEnabled,
-    ...cacheConfig.analytics,
-  });
-}
 
 // ==========================================
 // Targeted Mutation Hooks
@@ -180,3 +167,63 @@ export function useResetAndSeed() {
   });
 }
 
+
+export function useAnalyticsOverview(options?: { enabled?: boolean }) {
+  const isEnabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: ['analytics', 'overview'],
+    queryFn: getAnalyticsOverview,
+    enabled: isEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAnalyticsTime(options?: { enabled?: boolean }) {
+  const isEnabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: ['analytics', 'time'],
+    queryFn: getAnalyticsTime,
+    enabled: isEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAnalyticsSla(options?: { enabled?: boolean }) {
+  const isEnabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: ['analytics', 'sla'],
+    queryFn: getAnalyticsSla,
+    enabled: isEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAnalyticsWorkload(options?: { enabled?: boolean }) {
+  const isEnabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: ['analytics', 'workload'],
+    queryFn: getAnalyticsWorkload,
+    enabled: isEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAnalyticsTrends(options?: { enabled?: boolean }) {
+  const isEnabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: ['analytics', 'trends'],
+    queryFn: getAnalyticsTrends,
+    enabled: isEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAnalyticsInsights(options?: { enabled?: boolean }) {
+  const isEnabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: ['analytics', 'insights'],
+    queryFn: getAnalyticsInsights,
+    enabled: isEnabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}

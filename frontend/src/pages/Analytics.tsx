@@ -1,519 +1,878 @@
-import { Link } from "react-router-dom";
+import { useState } from 'react';
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  Cell 
-} from "recharts";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/Card";
-import { Badge } from "../components/ui/Badge";
-import { Skeleton } from "../components/ui/Skeleton";
-import { Button } from "../components/ui/Button";
+  XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line 
+} from 'recharts';
 import { 
-  Clock, 
-  ShieldAlert, 
-  ArrowLeft, 
-  UserCheck, 
-  AlertTriangle, 
-  ArrowUpRight, 
-  Activity, 
-  Inbox,
-  Flame
-} from "lucide-react";
-import { formatHoursToDaysAndHours, formatElapsedTime, getApplicationRisk } from "../utils/formatters";
-import { useRole } from "../context/RoleContext";
-import { useAnalyticsSummary, useApplications, useTasks } from "../hooks/useWorkflowQueries";
+  Activity, AlertTriangle, Users, TrendingUp, AlertCircle, CheckCircle2, 
+  RotateCw, ArrowRight, ShieldAlert, ExternalLink, Timer
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRole } from '../context/RoleContext';
+import { 
+  useAnalyticsOverview, 
+  useAnalyticsTime, 
+  useAnalyticsSla, 
+  useAnalyticsWorkload, 
+  useAnalyticsTrends, 
+  useAnalyticsInsights 
+} from '../hooks/useWorkflowQueries';
+import { formatDuration } from '../utils/formatDuration';
+
+// --- Reusable State Wrapper Component ---
+interface StateWrapperProps {
+  loading: boolean;
+  error: boolean;
+  hasData: boolean;
+  errorMessage: string;
+  emptyMessage: string;
+  children: React.ReactNode;
+  minHeight?: string;
+}
+
+function DataStateWrapper({ 
+  loading, 
+  error, 
+  hasData, 
+  errorMessage, 
+  emptyMessage, 
+  children,
+  minHeight = "min-h-[160px]"
+}: StateWrapperProps) {
+  if (loading) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full ${minHeight} text-slate-400 py-8`}>
+        <div className="w-7 h-7 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-medium text-slate-500">Loading operational data...</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full ${minHeight} text-rose-600 py-8`}>
+        <AlertCircle className="w-8 h-8 mb-2 opacity-80" />
+        <p className="text-sm font-medium">{errorMessage}</p>
+        <p className="text-xs text-slate-400 mt-1">Please try refreshing the page or checking server logs.</p>
+      </div>
+    );
+  }
+  if (!hasData) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full ${minHeight} text-slate-400 py-8`}>
+        <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center mb-2">
+          <Activity className="w-5 h-5 text-slate-300" />
+        </div>
+        <p className="text-sm text-slate-500">{emptyMessage}</p>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
 
 export default function Analytics() {
-  const { currentRole, switchRoleUser, allUsers } = useRole();
-  const isAdmin = currentRole === "Admin";
+  const { currentRole } = useRole();
+  const isAdmin = currentRole === 'Admin';
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(() => new Date());
 
-  // STRICT ARCHITECTURAL RULE: Do NOT trigger analytics API request when currentRole is not Admin
-  const { data: summary, isLoading: loadingSummary } = useAnalyticsSummary({ enabled: isAdmin });
-  const { data: applications = [], isLoading: loadingApps } = useApplications();
-  const { data: tasks = [], isLoading: loadingTasks } = useTasks();
+  // Analytics endpoints queried conditionally ONLY for Admin
+  const { data: overview, isLoading: loadingOverview, isError: _errOverview } = useAnalyticsOverview({ enabled: isAdmin });
+  const { data: time, isLoading: loadingTime, isError: _errTime } = useAnalyticsTime({ enabled: isAdmin });
+  const { data: sla, isLoading: loadingSla, isError: errSla } = useAnalyticsSla({ enabled: isAdmin });
+  const { data: workload, isLoading: loadingWorkload, isError: errWorkload } = useAnalyticsWorkload({ enabled: isAdmin });
+  const { data: trends, isLoading: loadingTrends, isError: errTrends } = useAnalyticsTrends({ enabled: isAdmin });
+  const { data: insights, isLoading: loadingInsights, isError: errInsights } = useAnalyticsInsights({ enabled: isAdmin });
 
-  // If user is not Admin, display Access Restricted view and do NOT fetch analytics data
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    setLastRefreshedAt(new Date());
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
+
+  // Restrict access for non-admin roles without querying APIs
   if (!isAdmin) {
-    const adminUser = allUsers.find((u) => u.role === "Admin");
-
     return (
-      <div className="py-16 text-center max-w-lg mx-auto space-y-5">
-        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
-          <ShieldAlert className="w-7 h-7" />
+      <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+        <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-rose-100 shadow-sm">
+          <AlertTriangle className="w-7 h-7" />
         </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Access Restricted</h2>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            Process Intelligence, pipeline velocity metrics, and delay diagnostics are reserved exclusively for the <strong>Admin</strong> supervisory role.
-          </p>
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-800 text-left">
-            <span className="font-semibold block mb-0.5">Demo Role Simulation Note:</span>
-            This role restriction demonstrates role-tailored operational views. It is <strong>not</strong> an authentication or authorization security boundary.
-          </div>
-        </div>
-
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link to="/">
-            <Button variant="outline" size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />}>
-              Return to Command Center
-            </Button>
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Restricted</h2>
+        <p className="text-slate-500 mt-2 max-w-md mx-auto text-sm">
+          Process Intelligence is an executive operational workspace restricted to Administrators.
+        </p>
+        <div className="mt-6">
+          <Link 
+            to="/" 
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            Return to Command Center
           </Link>
-          {adminUser && (
-            <Button 
-              variant="primary" 
-              size="sm" 
-              onClick={() => switchRoleUser(adminUser.id)}
-              icon={<UserCheck className="w-3.5 h-3.5" />}
-            >
-              Simulate as {adminUser.name} (Admin)
-            </Button>
-          )}
         </div>
       </div>
     );
   }
 
-  const isLoading = (loadingSummary && !summary) || (loadingApps && applications.length === 0) || (loadingTasks && tasks.length === 0);
+  // Derived time values
+  const avgLifecycleFormatted = formatDuration(time?.avg_total_elapsed_hours);
+  const avgQueueFormatted = formatDuration(time?.avg_queue_wait_hours);
+  const avgReviewFormatted = formatDuration(time?.avg_review_duration_hours);
+  const flowEfficiency = time?.active_review_percentage ? Math.round(time.active_review_percentage) : 0;
+  const waitingPercent = time?.queue_waiting_percentage ? Math.round(time.queue_waiting_percentage) : 0;
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-2xl" />)}
-        </div>
-        <Skeleton className="h-44 w-full rounded-2xl" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 rounded-2xl" />)}
-        </div>
-        <Skeleton className="h-72 w-full rounded-2xl" />
-      </div>
-    );
-  }
-
-  if (!summary) {
-    return (
-      <div className="py-16 text-center text-slate-500 text-sm">
-        No analytics data available.
-      </div>
-    );
-  }
-
-  // ── 1. Pipeline Metrics ──────────────────────────────────────────────────
-  const processingHours = Number(summary.avg_processing_time_hours.toFixed(1));
-  const waitingHours = Number(summary.avg_waiting_time_hours.toFixed(1));
-  const totalHours = processingHours + waitingHours;
-  const waitingPercentage = totalHours > 0 ? Math.round((waitingHours / totalHours) * 100) : 0;
-  const processingPercentage = 100 - waitingPercentage;
-
-  const completionRate = summary.total_applications > 0
-    ? Math.round((summary.completed_applications / summary.total_applications) * 100)
-    : 0;
-
-  const escalationRate = summary.total_applications > 0
-    ? Math.round((summary.total_escalations / summary.total_applications) * 100)
-    : 0;
-
-  // ── 2. Where Applications Are Stuck (Stage Breakdown) ───────────────────────────
-  const openUnclaimed = applications.filter(a => a.status === "OPEN" && !a.claimed_by_user_id);
-  const claimedUnderReview = applications.filter(a => a.status === "CLAIMED");
-  const openTasks = tasks.filter(t => t.status === "OPEN");
-  const escalationTasks = openTasks.filter(t => t.task_type === "ESCALATION");
-  const followUpTasks = openTasks.filter(t => t.task_type === "FOLLOW_UP");
-  const assignmentTasks = openTasks.filter(t => t.task_type === "ASSIGNMENT");
-
-  // Escalated Applications (unique application IDs)
-  const escalatedAppIds = new Set(escalationTasks.map(t => t.application_id));
-  const escalatedApps = applications.filter(a => escalatedAppIds.has(a.id));
-
-  // ── 3. Why Are They Delayed (SLA Breach Rules) ───────────────────────────
-  // Business SLA rules:
-  // - Intake > 24h unassigned -> ASSIGNMENT task created
-  // - Review > 24h claimed -> FOLLOW_UP task created
-  // - Review > 48h claimed -> ESCALATION task created
-  const slaBreachDetails = [
-    {
-      rule: "Intake > 24h (Unassigned)",
-      count: assignmentTasks.length,
-      impact: "Applications sitting without an assigned Underwriter.",
-      severity: assignmentTasks.length > 0 ? "amber" : "neutral",
-      action: "Assign to Underwriter"
-    },
-    {
-      rule: "Review > 24h (Underwriter Delay)",
-      count: followUpTasks.length,
-      impact: "Underwriting review has stalled past the initial 24-hour SLA window.",
-      severity: followUpTasks.length > 0 ? "amber" : "neutral",
-      action: "Prompt underwriter follow-up"
-    },
-    {
-      rule: "Review > 48h (Manager Escalation)",
-      count: escalationTasks.length,
-      impact: "Critical delay. Breached 48-hour SLA threshold requiring manager intervention.",
-      severity: escalationTasks.length > 0 ? "rose" : "neutral",
-      action: "Manager intervention required"
-    }
-  ];
-
-  // ── 4. What Needs Attention (Actionable Applications) ───────────────────────────
-  const atRiskApps = applications
-    .filter(a => a.status !== "COMPLETED")
-    .map(app => ({ app, risk: getApplicationRisk(app) }))
-    .filter(item => item.risk.level === "escalated" || item.risk.level === "at_risk" || item.risk.level === "attention")
-    .sort((a, b) => {
-      const order = { escalated: 3, at_risk: 2, attention: 1, normal: 0, completed: -1 };
-      return order[b.risk.level] - order[a.risk.level];
-    });
-
-  // ── 5. Bottleneck Analysis ───────────────────────────────────────────────
-  const isQueueBottleneck = summary.bottleneck_stage === "Intake Queue" || summary.bottleneck_stage === "Unassigned";
-
-  const bottleneckDescription = isQueueBottleneck
-    ? "Applications are spending the longest accumulated time in the unassigned intake queue waiting for an underwriter to claim them."
-    : summary.bottleneck_stage === "Underwriting Review"
-    ? "Applications are spending the longest accumulated time under review by underwriters after being assigned."
-    : `The highest accumulated delay is currently concentrated in the ${summary.bottleneck_stage} stage.`;
-
-  const bottleneckCases = isQueueBottleneck
-    ? openUnclaimed
-    : claimedUnderReview;
-
-  const chartData = [
-    {
-      name: "Human Review",
-      hours: processingHours,
-      color: "#4f46e5",
-    },
-    {
-      name: "Queue Waiting",
-      hours: waitingHours,
-      color: "#f59e0b",
-    }
-  ];
+  // Bottleneck values
+  const bottleneckStage = insights?.primary_bottleneck?.stage || "Underwriting Review";
+  const bottleneckAffected = insights?.primary_bottleneck?.affected_count ?? (sla?.escalated_count ?? 0);
+  const bottleneckUrl = insights?.primary_bottleneck?.target_url || "/applications?tab=delayed";
 
   return (
-    <div className="space-y-8">
-      {/* SECTION 1: Overall Pipeline Health */}
-      <div>
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-          1. Overall Pipeline Health
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Volume</div>
-            <div className="text-3xl font-bold text-slate-900">{summary.total_applications}</div>
-            <div className="text-xs text-slate-500">Applications in system</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completion Rate</div>
-            <div className="text-3xl font-bold text-emerald-600">{completionRate}%</div>
-            <div className="text-xs text-slate-500">{summary.completed_applications} of {summary.total_applications} finalized</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Escalation Rate</div>
-            <div className="text-3xl font-bold text-rose-600">{escalationRate}%</div>
-            <div className="text-xs text-slate-500">{summary.total_escalations} manager escalations</div>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Backlog</div>
-            <div className="text-3xl font-bold text-indigo-600">{summary.open_applications + summary.claimed_applications}</div>
-            <div className="text-xs text-slate-500">{summary.pending_action} tasks awaiting action</div>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 2: Where Applications Are Stuck */}
-      <div>
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-          2. Where Are Applications Getting Stuck?
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Intake Queue */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Inbox className="w-3.5 h-3.5 text-amber-500" />
-                  Intake Queue
-                </span>
-                <Badge variant={openUnclaimed.length > 0 ? "warning" : "default"} size="sm">
-                  {openUnclaimed.length} Unassigned
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Submitted applications awaiting Underwriter assignment. Over 24h triggers an Admin assignment task.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Requires:</span>
-              <span className="font-semibold text-slate-800">Underwriter Assignment</span>
-            </div>
-          </div>
-
-          {/* Under Review */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-indigo-500" />
-                  Underwriting Review
-                </span>
-                <Badge variant="info" size="sm">
-                  {claimedUnderReview.length} In Progress
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Applications currently claimed by underwriters. &gt;24h triggers underwriter follow-up; &gt;48h triggers manager escalation.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Requires:</span>
-              <span className="font-semibold text-slate-800">Underwriter Decision / Approval</span>
-            </div>
-          </div>
-
-          {/* Escalations */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
-                  Manager Escalations
-                </span>
-                <Badge variant={escalatedApps.length > 0 ? "error" : "success"} size="sm">
-                  {escalatedApps.length} Escalated
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Applications where SLA exceeded 48 hours without completion. Direct manager oversight active.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Requires:</span>
-              <span className="font-semibold text-rose-700">Manager Intervention</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 3: Why Are Applications Delayed (SLA Breach Breakdown) */}
-      <div>
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-          3. Why Are They Delayed? (Workflow Rule Triggers)
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-          {slaBreachDetails.map((item, idx) => (
-            <div key={idx} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-slate-900">{item.rule}</span>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                    item.count > 0 && item.severity === "rose" 
-                      ? "bg-rose-100 text-rose-700 border border-rose-200"
-                      : item.count > 0 && item.severity === "amber"
-                      ? "bg-amber-100 text-amber-800 border border-amber-200"
-                      : "bg-slate-100 text-slate-600"
-                  }`}>
-                    {item.count} Breach{item.count !== 1 ? "es" : ""}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500">{item.impact}</p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-xs text-slate-400 font-medium hidden md:inline">Action: {item.action}</span>
-                <Link to="/tasks">
-                  <Button variant="outline" size="xs">
-                    View Tasks
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* SECTION 4: Primary Bottleneck & Actionable Delay Analysis */}
-      <div>
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-          4. Primary Bottleneck Diagnosis
-        </div>
-        <div className="bg-linear-to-br from-slate-950 to-indigo-950 text-white rounded-2xl p-6 shadow-sm border border-indigo-900/40 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
-                <Flame className="w-4 h-4" />
-                Highest Accumulated Delay
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold">
-                Stage Bottleneck: <span className="text-amber-300">{summary.bottleneck_stage}</span>
-              </h3>
-            </div>
-            <span className="text-xs bg-white/10 px-2.5 py-1 rounded-lg font-medium text-slate-200 shrink-0">
-              {bottleneckCases.length} Applications Affected
-            </span>
-          </div>
-          <p className="text-sm text-slate-300 max-w-3xl leading-relaxed">
-            {bottleneckDescription} This stage has accumulated the most idle waiting hours across the portfolio.
-          </p>
-
-          {/* Quick list of Applications in the bottleneck stage */}
-          {bottleneckCases.length > 0 && (
-            <div className="pt-2 border-t border-white/10 space-y-2">
-              <div className="text-xs font-semibold text-slate-300">Applications currently delayed in this stage:</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {bottleneckCases.slice(0, 6).map(app => (
-                  <Link
-                    key={app.id}
-                    to={`/applications/${app.id}`}
-                    className="bg-white/5 hover:bg-white/10 transition-colors p-2.5 rounded-xl border border-white/10 flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <div className="font-mono font-bold text-indigo-300">{app.application_number}</div>
-                      <div className="text-[11px] text-slate-400">{formatElapsedTime(app.created_at)}</div>
-                    </div>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* SECTION 5: Time Analysis in Plain Language & Chart */}
-      <div>
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-          5. Active Work vs. Waiting Latency
-        </div>
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-indigo-600" />
-                Time Analysis Breakdown
-              </CardTitle>
-              <CardDescription>
-                Comparison between active underwriting touch time and queue waiting latency.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Plain language explanation */}
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs sm:text-sm text-slate-700 leading-relaxed space-y-2">
-              <p>
-                Across an average application lifecycle of <strong>{formatHoursToDaysAndHours(totalHours)}</strong>:
-              </p>
-              <ul className="list-disc pl-5 space-y-1 text-slate-600">
-                <li>
-                  <strong className="text-indigo-700">{formatHoursToDaysAndHours(processingHours)} ({processingPercentage}%)</strong> is spent in active human processing (reviewing documents, underwriting, decisioning).
-                </li>
-                <li>
-                  <strong className="text-amber-700">{formatHoursToDaysAndHours(waitingHours)} ({waitingPercentage}%)</strong> is spent idle in queues waiting for underwriter assignment or SLA escalation resolution.
-                </li>
-              </ul>
-              <p className="text-[11px] text-slate-500 pt-1">
-                Operational takeaway: Reducing queue idle time before assignment yields significantly faster turnaround than accelerating underwriter review speed.
-              </p>
-            </div>
-
-            {/* Bar Chart */}
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 20, right: 20, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="name"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "#64748b", fontSize: 12, fontWeight: 500 }}
-                    dy={10}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "#64748b", fontSize: 12 }}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "#f1f5f9" }}
-                    formatter={(value) => [formatHoursToDaysAndHours(Number(value)), "Duration"]}
-                    contentStyle={{
-                      borderRadius: "12px",
-                      border: "1px solid #e2e8f0",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                      fontSize: "12px"
-                    }}
-                  />
-                  <Bar dataKey="hours" radius={[8, 8, 0, 0]} maxBarSize={80}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Legend & Summary */}
-            <div className="flex flex-wrap items-center justify-center gap-6 pt-4 border-t border-slate-100 text-xs text-slate-600">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-indigo-600 inline-block" />
-                <span>Active Touch Time: <strong>{formatHoursToDaysAndHours(processingHours)}</strong> ({processingPercentage}%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
-                <span>Idle Waiting Latency: <strong>{formatHoursToDaysAndHours(waitingHours)}</strong> ({waitingPercentage}%)</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* SECTION 6: What Needs Immediate Attention */}
-      {atRiskApps.length > 0 && (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7">
+      
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              6. Actionable Applications Needing Attention ({atRiskApps.length})
-            </div>
-            <Link to="/applications" className="text-xs text-indigo-600 hover:underline font-medium">
-              View in pipeline →
-            </Link>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Workflow Performance Overview</h1>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-            {atRiskApps.slice(0, 5).map(({ app, risk }) => (
-              <div key={app.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="min-w-0">
-                    <Link
-                      to={`/applications/${app.id}`}
-                      className="font-mono text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
-                    >
-                      {app.application_number}
-                      <ArrowUpRight className="w-3 h-3 text-slate-400" />
-                    </Link>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      Stage: <span className="text-slate-700 font-medium">{app.current_stage || "Intake"}</span> · Owned by: <span className="text-slate-700 font-medium">{app.claimed_by?.name || "Unassigned"}</span> · {formatElapsedTime(app.created_at)}
+        </div>
+
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <span className="text-xs text-slate-400 font-mono">
+            Updated {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-colors disabled:opacity-60"
+            title="Refresh operational metrics"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-600' : 'text-slate-500'}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* SECTION 1 — PROCESS HEALTH (Operational Strip) */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+          <span>Process Health Overview</span>
+          <span className="text-[11px] font-normal text-slate-400">Deterministic operational benchmark</span>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+          
+          {/* Average Lifecycle */}
+          <div className="pt-2 md:pt-0 md:px-3 first:pl-0">
+            <p className="text-xs font-medium text-slate-500">Avg Lifecycle Time</p>
+            <p className="text-xl font-bold text-slate-900 mt-1 tracking-tight">
+              {loadingTime ? '...' : avgLifecycleFormatted}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">End-to-end average</p>
+          </div>
+
+          {/* Flow Efficiency */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <p className="text-xs font-medium text-slate-500">Flow Efficiency</p>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="text-xl font-bold text-slate-900">{loadingTime ? '...' : `${flowEfficiency}%`}</span>
+              <span className="text-[11px] text-emerald-600 font-medium">active review</span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">Active Review / Total</p>
+          </div>
+
+          {/* Waiting Time % */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <p className="text-xs font-medium text-slate-500">Waiting Time %</p>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="text-xl font-bold text-slate-900">{loadingTime ? '...' : `${waitingPercent}%`}</span>
+              <span className="text-[11px] text-amber-600 font-medium">in queue</span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">Queue Wait / Total</p>
+          </div>
+
+          {/* Delayed Applications */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <p className="text-xs font-medium text-slate-500">Delayed Applications</p>
+            <Link 
+              to="/applications?tab=delayed" 
+              className="group flex items-baseline gap-2 mt-1 hover:opacity-80 transition-opacity"
+            >
+              <span className="text-xl font-bold text-amber-600">
+                {loadingOverview ? '...' : overview?.delayed_applications ?? 0}
+              </span>
+              <span className="text-[11px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-medium group-hover:underline inline-flex items-center gap-0.5">
+                Investigate &rarr;
+              </span>
+            </Link>
+            <p className="text-[11px] text-slate-400 mt-0.5">Past 24h SLA target</p>
+          </div>
+
+          {/* Escalated Applications */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <p className="text-xs font-medium text-slate-500">Escalated Applications</p>
+            <Link 
+              to="/applications?tab=escalated" 
+              className="group flex items-baseline gap-2 mt-1 hover:opacity-80 transition-opacity"
+            >
+              <span className="text-xl font-bold text-rose-600">
+                {loadingOverview ? '...' : overview?.escalated_applications ?? 0}
+              </span>
+              <span className="text-[11px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded font-medium group-hover:underline inline-flex items-center gap-0.5">
+                Critical &rarr;
+              </span>
+            </Link>
+            <p className="text-[11px] text-slate-400 mt-0.5">Past 48h critical threshold</p>
+          </div>
+
+          {/* Active Applications */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <p className="text-xs font-medium text-slate-500">Active Applications</p>
+            <p className="text-xl font-bold text-slate-900 mt-1 tracking-tight">
+              {loadingOverview ? '...' : overview?.active_applications ?? 0}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Currently in flight</p>
+          </div>
+
+        </div>
+      </div>
+
+      {/* SECTION 2 & 3 — PRIMARY BOTTLENECK & WHERE TIME IS BEING LOST */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* SECTION 3: Primary Bottleneck Callout (Left Column - 5 cols) */}
+        <div className="lg:col-span-5 flex flex-col">
+          <div className="bg-linear-to-br from-rose-50/70 via-white to-white rounded-2xl border-2 border-rose-200/90 shadow-sm p-6 flex flex-col justify-between h-full relative overflow-hidden">
+            <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 w-28 h-28 bg-rose-100/50 rounded-full blur-2xl pointer-events-none" />
+            
+            <div>
+              <div className="flex items-center gap-2 text-rose-700 font-semibold text-xs tracking-wider uppercase mb-2">
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Primary Bottleneck</span>
+              </div>
+              
+              <h3 className="text-2xl font-bold text-slate-900 tracking-tight">
+                {loadingInsights ? "Analyzing workflow..." : bottleneckStage}
+              </h3>
+
+              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                {insights?.primary_bottleneck?.evidence || "Review processing is contributing the largest observed delay across the application pipeline."}
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-rose-100/80">
+                <div className="bg-white/80 rounded-xl p-3 border border-rose-100 shadow-2xs">
+                  <p className="text-xs text-slate-500">Affected Applications</p>
+                  <p className="text-lg font-bold text-rose-600 mt-0.5">
+                    {loadingInsights ? '...' : `${bottleneckAffected} applications`}
+                  </p>
+                </div>
+                <div className="bg-white/80 rounded-xl p-3 border border-rose-100 shadow-2xs">
+                  <p className="text-xs text-slate-500">Average Duration</p>
+                  <p className="text-lg font-bold text-slate-900 mt-0.5">
+                    {loadingTime ? '...' : (bottleneckStage === "Assignment Queue" ? avgQueueFormatted : avgReviewFormatted)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-rose-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Requires operational rebalancing</span>
+              <Link 
+                to={bottleneckUrl}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-all hover:gap-2"
+              >
+                <span>View Affected Applications</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 2: Where Is Application Time Being Lost? (Right Column - 7 cols) */}
+        <div className="lg:col-span-7 flex flex-col">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 flex flex-col justify-between h-full">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                  Where Is Application Time Being Lost?
+                </h3>
+                <span className="text-xs text-slate-400 font-medium">Stage-level delay distribution</span>
+              </div>
+              <p className="text-xs text-slate-500 mb-6">
+                Comparative analysis of time accumulation across primary workflow stages.
+              </p>
+
+              {/* Process Stages Comparison Visualization */}
+              <div className="space-y-5">
+                
+                {/* Stage 1: Assignment Queue */}
+                <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/60">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      <span className="text-sm font-semibold text-slate-900">Assignment Queue</span>
+                      <span className="text-xs text-slate-500">(Claim Intake & Assignment)</span>
                     </div>
+                    <span className="text-xs font-semibold text-slate-700">
+                      Avg Wait: <span className="text-amber-700 font-bold">{loadingTime ? '...' : avgQueueFormatted}</span>
+                    </span>
+                  </div>
+
+                  {/* Visual Proportion Bar */}
+                  <div className="w-full bg-slate-200/80 rounded-full h-2.5 overflow-hidden mb-2">
+                    <div 
+                      className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.max(5, Math.min(100, waitingPercent))}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      <strong className="text-slate-800">{sla?.assignment_delayed_count ?? 0}</strong> unassigned beyond 24h SLA
+                    </span>
+                    <span>{waitingPercent}% of total lifecycle time</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant={risk.badgeVariant} size="sm">
-                    {risk.label}
-                  </Badge>
-                  <Link to={`/applications/${app.id}`}>
-                    <Button size="xs" variant="outline">
-                      Investigate
-                    </Button>
-                  </Link>
+
+                {/* Stage 2: Underwriting Review */}
+                <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-600" />
+                      <span className="text-sm font-semibold text-slate-900">Underwriting Review</span>
+                      <span className="text-xs text-slate-500">(Active Case Decisioning)</span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700">
+                      Avg Review: <span className="text-indigo-700 font-bold">{loadingTime ? '...' : avgReviewFormatted}</span>
+                    </span>
+                  </div>
+
+                  {/* Visual Proportion Bar */}
+                  <div className="w-full bg-indigo-200/60 rounded-full h-2.5 overflow-hidden mb-2">
+                    <div 
+                      className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.max(5, Math.min(100, flowEfficiency))}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      <strong className="text-rose-700">{sla?.escalated_count ?? 0}</strong> critical escalated (&gt;48h)
+                    </span>
+                    <span>{flowEfficiency}% of total lifecycle time</span>
+                  </div>
                 </div>
+
+              </div>
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+              <span>SLA Baseline: 24h Assignment • 24h Review • 48h Escalation</span>
+              <span className="font-medium text-slate-600">Review stage dominates accumulated duration</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* SECTION 4 — WAITING VS ACTIVE REVIEW (Time Decomposition) */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Timer className="w-4 h-4 text-indigo-600" />
+              <span>Time Decomposition: Queue Waiting vs Active Review</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Total Lifecycle Time = Queue Waiting Time + Review Duration
+            </p>
+          </div>
+          <div className="text-xs font-medium text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/60 self-start">
+            Total Average: <span className="font-bold text-slate-900">{avgLifecycleFormatted}</span>
+          </div>
+        </div>
+
+        {/* Dual Stacked Composition Bar */}
+        <div className="my-5">
+          <div className="w-full h-6 rounded-xl bg-slate-100 overflow-hidden flex shadow-inner">
+            <div 
+              className="bg-amber-500 h-full flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500"
+              style={{ width: `${Math.max(10, Math.min(90, waitingPercent))}%` }}
+              title={`Queue Waiting Time: ${waitingPercent}% (${avgQueueFormatted})`}
+            >
+              {waitingPercent}%
+            </div>
+            <div 
+              className="bg-indigo-600 h-full flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500"
+              style={{ width: `${Math.max(10, Math.min(90, flowEfficiency))}%` }}
+              title={`Active Review Time: ${flowEfficiency}% (${avgReviewFormatted})`}
+            >
+              {flowEfficiency}%
+            </div>
+          </div>
+
+          {/* Breakdown cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div className="p-3.5 rounded-xl border border-amber-200/60 bg-amber-50/40 flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-amber-500" />
+                  <span className="text-xs font-semibold text-slate-800">Queue Waiting Time</span>
+                </div>
+                <p className="text-lg font-bold text-amber-900 mt-1">{avgQueueFormatted}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Time before an underwriter claims or receives the application.</p>
+              </div>
+              <span className="text-xs font-bold text-amber-700 bg-white px-2 py-1 rounded-md border border-amber-200 shadow-2xs">
+                {waitingPercent}%
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl border border-indigo-200/60 bg-indigo-50/40 flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-indigo-600" />
+                  <span className="text-xs font-semibold text-slate-800">Active Review Time</span>
+                </div>
+                <p className="text-lg font-bold text-indigo-900 mt-1">{avgReviewFormatted}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Duration application is actively being investigated by an underwriter.</p>
+              </div>
+              <span className="text-xs font-bold text-indigo-700 bg-white px-2 py-1 rounded-md border border-indigo-200 shadow-2xs">
+                {flowEfficiency}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 5 — DELAY EXPOSURE */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">
+              Delay Exposure
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Current volume of applications by distinct operational delay classification.
+            </p>
+          </div>
+          <span className="text-xs text-slate-400">Strict SLA cohort breakdown</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Assignment Delayed */}
+          <Link 
+            to="/applications?tab=assignment_delayed" 
+            className="p-4 rounded-xl border border-amber-200 bg-amber-50/30 hover:bg-amber-50/70 transition-all group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-amber-800">Assignment Delayed</span>
+              <ExternalLink className="w-3.5 h-3.5 text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <p className="text-2xl font-extrabold text-amber-900 mt-2">
+              {sla?.assignment_delayed_count ?? 0}
+            </p>
+            <p className="text-xs text-slate-600 mt-1 font-medium">Unassigned &gt; 24h SLA</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Awaiting intake claiming</p>
+          </Link>
+
+          {/* Review Delayed */}
+          <Link 
+            to="/applications?tab=delayed" 
+            className="p-4 rounded-xl border border-amber-200 bg-amber-50/30 hover:bg-amber-50/70 transition-all group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-amber-800">Review Delayed</span>
+              <ExternalLink className="w-3.5 h-3.5 text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <p className="text-2xl font-extrabold text-amber-900 mt-2">
+              {sla?.review_delayed_count ?? 0}
+            </p>
+            <p className="text-xs text-slate-600 mt-1 font-medium">In review 24h – 48h</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Past initial review SLA</p>
+          </Link>
+
+          {/* Critical Escalated */}
+          <Link 
+            to="/applications?tab=escalated" 
+            className="p-4 rounded-xl border border-rose-200 bg-rose-50/40 hover:bg-rose-50/80 transition-all group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-rose-800">Critical Escalated</span>
+              <ExternalLink className="w-3.5 h-3.5 text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <p className="text-2xl font-extrabold text-rose-900 mt-2">
+              {sla?.escalated_count ?? 0}
+            </p>
+            <p className="text-xs text-rose-700 mt-1 font-medium">In review &gt; 48h critical</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Breached critical SLA threshold</p>
+          </Link>
+
+          {/* Total Escalated */}
+          <Link 
+            to="/applications?tab=escalated" 
+            className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-100/60 transition-all group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700">Total Escalated</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <p className="text-2xl font-extrabold text-slate-900 mt-2">
+              {overview?.escalated_applications ?? 0}
+            </p>
+            <p className="text-xs text-slate-600 mt-1 font-medium">Pipeline-wide escalations</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Requires manager intervention</p>
+          </Link>
+
+        </div>
+      </div>
+
+      {/* SECTION 6 — APPLICATIONS DRIVING DELAY (Investigation Table) */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/40">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <span>Applications Driving Delay</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Ranked by accumulated delay beyond SLA target. Never exposes internal database IDs.
+            </p>
+          </div>
+          <Link 
+            to="/applications?tab=delayed" 
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
+          >
+            <span>View All Delayed</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto">
+          <DataStateWrapper
+            loading={loadingSla}
+            error={errSla}
+            hasData={Boolean(sla?.delay_contributors && sla.delay_contributors.length > 0)}
+            errorMessage="Unable to load delay contributors."
+            emptyMessage="No delayed applications found. Operational flow is within SLA targets."
+          >
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200/80 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="px-6 py-3.5">Application</th>
+                  <th className="px-6 py-3.5">Stage</th>
+                  <th className="px-6 py-3.5">Underwriter</th>
+                  <th className="px-6 py-3.5">Elapsed Time</th>
+                  <th className="px-6 py-3.5">Delay (Beyond SLA)</th>
+                  <th className="px-6 py-3.5">State</th>
+                  <th className="px-6 py-3.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sla?.delay_contributors?.map((item) => (
+                  <tr key={item.application_id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-6 py-4 font-mono font-medium text-indigo-600">
+                      <Link 
+                        to={`/applications/${item.application_id}`}
+                        className="hover:underline flex items-center gap-1"
+                        title={`Open workspace for ${item.application_number}`}
+                      >
+                        {item.application_number}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-slate-700 font-medium">
+                      {item.stage}
+                    </td>
+                    <td className="px-6 py-4 text-slate-600">
+                      {item.underwriter ? (
+                        <span className="font-medium text-slate-800">{item.underwriter}</span>
+                      ) : (
+                        <span className="text-slate-400 italic">Unassigned</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-slate-900 font-medium font-mono text-xs">
+                      {formatDuration(item.elapsed_time_hours)}
+                    </td>
+                    <td className="px-6 py-4 text-rose-600 font-bold font-mono text-xs">
+                      +{formatDuration(item.sla_excess_hours)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        item.sla_state === 'ESCALATED' 
+                          ? 'bg-rose-100 text-rose-800 border border-rose-200' 
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}>
+                        {item.sla_state}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <Link 
+                        to={`/applications/${item.application_id}`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-900 hover:underline"
+                      >
+                        <span>Investigate</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DataStateWrapper>
+        </div>
+      </div>
+
+      {/* SECTION 7 — UNDERWRITER WORKLOAD */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/40">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Users className="w-4 h-4 text-slate-700" />
+              <span>Underwriter Workload</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Current active application capacity and delay distribution by underwriter.
+            </p>
+          </div>
+          <span className="text-xs text-slate-400">Operational visibility • No employee ranking</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <DataStateWrapper
+            loading={loadingWorkload}
+            error={errWorkload}
+            hasData={Boolean(workload?.underwriters && workload.underwriters.length > 0)}
+            errorMessage="Unable to load workload data."
+            emptyMessage="No underwriter workload data available."
+          >
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200/80 text-xs uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="px-6 py-3.5">Underwriter</th>
+                  <th className="px-6 py-3.5">Active</th>
+                  <th className="px-6 py-3.5">Delayed</th>
+                  <th className="px-6 py-3.5">Escalated</th>
+                  <th className="px-6 py-3.5">Avg Review Time</th>
+                  <th className="px-6 py-3.5">Oldest Active</th>
+                  <th className="px-6 py-3.5 text-right">View Workload</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {workload?.underwriters?.map((uw) => (
+                  <tr key={uw.user_id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-6 py-4 font-semibold text-slate-900">
+                      {uw.name}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-800">
+                        {uw.active_applications}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {uw.delayed_applications > 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          {uw.delayed_applications} delayed
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {uw.escalated_applications > 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          {uw.escalated_applications} escalated
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-slate-700 font-mono text-xs">
+                      {formatDuration(uw.avg_review_hours)}
+                    </td>
+                    <td className="px-6 py-4 text-slate-700 font-mono text-xs">
+                      {uw.oldest_active_review_hours ? formatDuration(uw.oldest_active_review_hours) : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <Link 
+                        to={`/applications?underwriter=${encodeURIComponent(uw.name)}`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-900 hover:underline"
+                      >
+                        <span>Filter Cases</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DataStateWrapper>
+        </div>
+      </div>
+
+      {/* SECTION 8 — PROCESS TRENDS */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+              <span>Process Trends (Past 7 Days)</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Chronological operational velocity and intake versus completion volume.
+            </p>
+          </div>
+          <span className="text-xs text-slate-400">Oldest &rarr; Newest</span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Chart A: Application Flow */}
+          <div className="flex flex-col">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+              Application Inflow vs Outcomes
+            </h4>
+            <div className="h-70 w-full">
+              <DataStateWrapper
+                loading={loadingTrends}
+                error={errTrends}
+                hasData={Boolean(trends?.data && trends.data.length > 0)}
+                errorMessage="Unable to load trend data."
+                emptyMessage="No historical trend data available for the selected period."
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trends?.data || []} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                    <Line type="monotone" dataKey="submitted" name="Submitted" stroke="#64748b" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="approved" name="Approved" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="rejected" name="Rejected" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </DataStateWrapper>
+            </div>
+          </div>
+
+          {/* Chart B: Processing Duration Velocity */}
+          <div className="flex flex-col">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+              Processing Duration Velocity (Hours)
+            </h4>
+            <div className="h-70 w-full">
+              <DataStateWrapper
+                loading={loadingTrends}
+                error={errTrends}
+                hasData={Boolean(trends?.data && trends.data.length > 0)}
+                errorMessage="Unable to load time trend data."
+                emptyMessage="No historical time data available for the selected period."
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trends?.data || []} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis 
+                      tick={{ fontSize: 11, fill: '#64748b' }} 
+                      unit="h" 
+                      tickFormatter={(val) => `${Math.round(val)}h`}
+                    />
+                    <RechartsTooltip 
+                      formatter={(val: unknown) => [typeof val === 'number' ? formatDuration(val) : String(val), '']}
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                    <Line type="monotone" dataKey="avg_queue_wait_hours" name="Avg Queue Wait" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="avg_review_hours" name="Avg Review Duration" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </DataStateWrapper>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* SECTION 9 — OPERATIONAL INSIGHTS */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Activity className="w-4 h-4 text-indigo-600" />
+              <span>Operational Insights & Findings</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Deterministic, evidence-backed findings derived from measurable application timestamps.
+            </p>
+          </div>
+          <span className="text-xs text-slate-400">Automated diagnosis</span>
+        </div>
+
+        <DataStateWrapper
+          loading={loadingInsights}
+          error={errInsights}
+          hasData={Boolean(insights?.insights && insights.insights.length > 0)}
+          errorMessage="Unable to load operational insights."
+          emptyMessage="No operational anomalies or SLA breaches identified."
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {insights?.insights.map((insight, idx) => (
+              <div 
+                key={idx} 
+                className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                  insight.severity === 'HIGH' 
+                    ? 'bg-rose-50/40 border-rose-200' 
+                    : 'bg-amber-50/40 border-amber-200'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                      insight.severity === 'HIGH' 
+                        ? 'bg-rose-100 text-rose-800' 
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {insight.severity === 'HIGH' ? (
+                        <AlertCircle className="w-3 h-3" />
+                      ) : (
+                        <CheckCircle2 className="w-3 h-3" />
+                      )}
+                      {insight.severity} ATTENTION
+                    </span>
+                    {insight.affected_count !== undefined && (
+                      <span className="text-xs font-semibold text-slate-600">
+                        {insight.affected_count} affected
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {insight.message}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    {insight.evidence}
+                  </p>
+                </div>
+
+                {insight.target_url && (
+                  <div className="mt-4 pt-3 border-t border-slate-200/50 flex justify-end">
+                    <Link 
+                      to={insight.target_url} 
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+                    >
+                      <span>Investigate cohort</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+                )}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        </DataStateWrapper>
+      </div>
+
     </div>
   );
 }

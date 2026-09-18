@@ -72,6 +72,17 @@ export function formatElapsedTime(createdAt: string, compact: boolean = true): s
   return formatHoursToDaysAndHours(ageHours, compact);
 }
 
+/**
+ * Canonical check for Delayed Applications:
+ * - Status is CLAIMED (not finalized)
+ * - Has claimed_at and review duration > 24h
+ * - Note: review duration > 48h will appear as 'Escalated', but remains part of Delayed population.
+ */
+export function isApplicationDelayed(app: Application): boolean {
+  if (app.status !== 'CLAIMED' || !app.claimed_at) return false;
+  return getApplicationAgeHours(app.claimed_at) > 24;
+}
+
 export function getApplicationRisk(app: Application): {
   level: 'normal' | 'attention' | 'at_risk' | 'escalated' | 'completed';
   label: string;
@@ -131,6 +142,23 @@ export function getApplicationRisk(app: Application): {
   }
 
   if (app.status === 'CLAIMED') {
+    const reviewAge = app.claimed_at ? getApplicationAgeHours(app.claimed_at) : 0;
+    if (reviewAge > 48) {
+      return {
+        level: 'escalated',
+        label: 'Escalated',
+        badgeVariant: 'error',
+        reason: 'Review duration has exceeded 48-hour critical SLA'
+      };
+    }
+    if (reviewAge > 24) {
+      return {
+        level: 'at_risk',
+        label: 'Delayed',
+        badgeVariant: 'warning',
+        reason: 'Review duration has exceeded 24-hour SLA'
+      };
+    }
     return {
       level: 'normal',
       label: 'In Progress',

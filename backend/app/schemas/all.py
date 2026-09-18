@@ -82,3 +82,81 @@ class AnalyticsSummary(BaseModel):
     total_escalations: int
     bottleneck_stage: str
 
+
+
+class AnalyticsOverview(BaseModel):
+    total_applications: int
+    active_applications: int
+
+
+class AnalyticsOverview(BaseModel):
+    total_applications: int
+    active_applications: int
+    unassigned_applications: int
+    delayed_applications: int
+    escalated_applications: int
+    approved_applications: int
+    rejected_applications: int
+
+class AnalyticsTime(BaseModel):
+    avg_total_elapsed_hours: float
+    avg_queue_wait_hours: float
+    avg_review_duration_hours: float
+    queue_waiting_percentage: float
+    active_review_percentage: float
+
+class DelayContributor(BaseModel):
+    application_id: int
+    application_number: str
+    stage: str
+    underwriter: Optional[str] = None
+    elapsed_time_hours: float
+    sla_excess_hours: float
+    sla_state: str
+
+class AnalyticsSla(BaseModel):
+    assignment_delayed_count: int
+    review_delayed_count: int
+    escalated_count: int
+    assignment_sla_excess_hours: float
+    review_sla_excess_hours: float
+    critical_excess_hours: float
+    delay_contributors: List[DelayContributor]
+
+class WorkloadItem(BaseModel):
+    user_id: int
+    name: str
+    active_applications: int
+    delayed_applications: int
+    escalated_applications: int
+    avg_review_hours: float
+    oldest_active_review_hours: Optional[float] = None
+
+class AnalyticsWorkload(BaseModel):
+    underwriters: List[WorkloadItem]
+
+class TrendDataPoint(BaseModel):
+    date: str  # YYYY-MM-DD
+    submitted: int
+    approved: int
+    rejected: int
+    avg_queue_wait_hours: float
+    avg_review_hours: float
+    delayed: int
+    escalated: int
+
+class AnalyticsTrends(BaseModel):
+    data: List[TrendDataPoint]
+
+class AnalyticsInsight(BaseModel):
+    type: str
+    severity: str
+    message: str
+    evidence: str
+    stage: Optional[str] = None
+    affected_count: Optional[int] = None
+    target_url: Optional[str] = None
+
+class AnalyticsInsightsResponse(BaseModel):
+    primary_bottleneck: Optional[AnalyticsInsight] = None
+    insights: List[AnalyticsInsight]
