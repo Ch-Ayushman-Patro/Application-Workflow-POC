@@ -75,3 +75,6 @@ start.bat
 
 #Documentation Files
 .docs/
+
+# Scratch Files
+scratch/

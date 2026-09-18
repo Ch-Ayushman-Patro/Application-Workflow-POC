@@ -25,6 +25,7 @@ import {
   formatRelativeTime,
   formatElapsedTime,
   formatShortDate,
+  isApplicationDelayed,
 } from "../utils/formatters";
 import {
   Search,
@@ -184,7 +185,7 @@ export default function Applications() {
   const c_unassigned = underwriterScopedApps.filter((a) => a.status === "OPEN" && !a.claimed_by_user_id);
   const c_assignment_delayed = c_unassigned.filter((a) => getAgeHours(a.created_at) > 24);
   const c_in_progress = underwriterScopedApps.filter((a) => a.status === "CLAIMED");
-  const c_delayed = c_in_progress.filter((a) => a.claimed_at && getAgeHours(a.claimed_at) > 24);
+  const c_delayed = underwriterScopedApps.filter(isApplicationDelayed);
   const c_approved = underwriterScopedApps.filter(
     (a) =>
       a.status === "COMPLETED" &&

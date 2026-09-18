@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useRole } from "../context/RoleContext";
 import { useApplications, useTasks } from "./useWorkflowQueries";
 import type { Application, Task, User } from "../types";
-import { getApplicationRisk } from "../utils/formatters";
+import { isApplicationDelayed } from "../utils/formatters";
 
 /**
  * UserScopeData — all derived user/team views computed from the shared server cache.
@@ -60,11 +60,6 @@ export interface UserScopeData {
   isLoading: boolean;
 }
 
-function isAtRisk(app: Application): boolean {
-  const risk = getApplicationRisk(app);
-  return risk.level === "escalated" || risk.level === "at_risk" || risk.level === "attention";
-}
-
 export function useUserScope(): UserScopeData {
   const { currentUser, currentRole, allUsers } = useRole();
   const { data: applications = [], isLoading: loadingApps } = useApplications();
@@ -93,7 +88,10 @@ export function useUserScope(): UserScopeData {
   const allApplications = applications;
 
   const unclaimedApplications = useMemo(
-    () => applications.filter((a) => a.status === "OPEN" && !a.claimed_by_user_id),
+    () =>
+      applications
+        .filter((a) => a.status === "OPEN" && !a.claimed_by_user_id)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
     [applications]
   );
 
@@ -155,18 +153,24 @@ export function useUserScope(): UserScopeData {
   );
 
   // ── Risk views (derived) ─────────────────────────────────────────────────
+  const sortByReviewTimeDesc = (a: Application, b: Application) => {
+    const timeA = a.claimed_at ? new Date(a.claimed_at).getTime() : new Date(a.created_at).getTime();
+    const timeB = b.claimed_at ? new Date(b.claimed_at).getTime() : new Date(b.created_at).getTime();
+    return timeA - timeB;
+  };
+
   const myDelayedApplications = useMemo(
-    () => myApplications.filter((a) => a.status !== "COMPLETED" && isAtRisk(a)),
+    () => myApplications.filter(isApplicationDelayed).sort(sortByReviewTimeDesc),
     [myApplications]
   );
 
   const teamDelayedApplications = useMemo(
-    () => teamApplications.filter((a) => a.status !== "COMPLETED" && isAtRisk(a)),
+    () => teamApplications.filter(isApplicationDelayed).sort(sortByReviewTimeDesc),
     [teamApplications]
   );
 
   const allDelayedApplications = useMemo(
-    () => applications.filter((a) => a.status !== "COMPLETED" && isAtRisk(a)),
+    () => applications.filter(isApplicationDelayed).sort(sortByReviewTimeDesc),
     [applications]
   );
 
