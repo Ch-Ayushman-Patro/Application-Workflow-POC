@@ -25,9 +25,9 @@ $$
 \text{Admin} \longrightarrow \text{Manager} \longrightarrow \text{Underwriter}
 $$
 
-- **Admin** (e.g. Alice Admin): Supervisory/administrative user. Monitors applications, full portfolio health, and handles unclaimed assignment tasks.
-- **Manager** (e.g. Diana Manager): Supervises underwriters, monitors team cases, and resolves manager escalations.
-- **Underwriter** (e.g. Bob Underwriter, Charlie Underwriter): Internal employees who claim and process loan applications.
+- **Admin** (e.g. Rohit): Supervisory/administrative user. Monitors applications, full portfolio health, and handles unclaimed assignment tasks.
+- **Manager** (e.g. Neeraj): Supervises underwriters, monitors team cases, and resolves manager escalations.
+- **Underwriter** (e.g. Abhinav, Lakshay): Internal employees who claim and process loan applications.
 
 > **DEMO ROLE SIMULATION DISCLAIMER**: The frontend Role Switcher is strictly a demonstration feature allowing quick persona simulation across Admin, Manager, and Underwriter perspectives. It is **not** an authentication or authorization system and does not enforce security boundaries.
 

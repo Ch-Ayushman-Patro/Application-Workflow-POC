@@ -42,11 +42,11 @@ export interface UserScopeData {
 
   // ── Derived Risk Views ───────────────────────────────────────────────────
   /** My applications that are at-risk or escalated */
-  myOverdueApplications: Application[];
+  myDelayedApplications: Application[];
   /** Team applications that are at-risk or escalated */
-  teamOverdueApplications: Application[];
+  teamDelayedApplications: Application[];
   /** All non-completed apps that are at-risk or escalated (Admin) */
-  allOverdueApplications: Application[];
+  allDelayedApplications: Application[];
 
   // ── Hierarchy ────────────────────────────────────────────────────────────
   /** IDs of users who directly report to currentUser */
@@ -155,17 +155,17 @@ export function useUserScope(): UserScopeData {
   );
 
   // ── Risk views (derived) ─────────────────────────────────────────────────
-  const myOverdueApplications = useMemo(
+  const myDelayedApplications = useMemo(
     () => myApplications.filter((a) => a.status !== "COMPLETED" && isAtRisk(a)),
     [myApplications]
   );
 
-  const teamOverdueApplications = useMemo(
+  const teamDelayedApplications = useMemo(
     () => teamApplications.filter((a) => a.status !== "COMPLETED" && isAtRisk(a)),
     [teamApplications]
   );
 
-  const allOverdueApplications = useMemo(
+  const allDelayedApplications = useMemo(
     () => applications.filter((a) => a.status !== "COMPLETED" && isAtRisk(a)),
     [applications]
   );
@@ -183,9 +183,9 @@ export function useUserScope(): UserScopeData {
     myEscalations,
     allOpenTasks,
     // Risk
-    myOverdueApplications,
-    teamOverdueApplications,
-    allOverdueApplications,
+    myDelayedApplications,
+    teamDelayedApplications,
+    allDelayedApplications,
     // Hierarchy
     teamMemberIds,
     teamMembers,

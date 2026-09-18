@@ -67,7 +67,7 @@ export function formatHoursToDaysAndHours(hours: number, compact: boolean = true
     : `${days} ${days === 1 ? 'day' : 'days'} ${remainingHours} hrs`;
 }
 
-export function formatApplicationAge(createdAt: string, compact: boolean = true): string {
+export function formatElapsedTime(createdAt: string, compact: boolean = true): string {
   const ageHours = getApplicationAgeHours(createdAt);
   return formatHoursToDaysAndHours(ageHours, compact);
 }

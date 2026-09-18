@@ -38,9 +38,9 @@ const taskTypeLabel = (type: string) => {
 };
 
 const taskTypeSLAContext = (type: string) => {
-  if (type === "ESCALATION") return "Application breached 48h SLA — manager intervention required.";
-  if (type === "FOLLOW_UP") return "Claimed review exceeded 24h SLA — underwriter follow-up needed.";
-  if (type === "ASSIGNMENT") return "Application unclaimed for >24h — underwriter assignment required.";
+  if (type === "ESCALATION") return "Application breached 48h SLA - manager intervention required.";
+  if (type === "FOLLOW_UP") return "Claimed review exceeded 24h SLA - underwriter follow-up needed.";
+  if (type === "ASSIGNMENT") return "Application unclaimed for >24h - underwriter assignment required.";
   return "";
 };
 
@@ -64,6 +64,7 @@ const taskTypeSLAContext = (type: string) => {
  * Underwriter:
  *   "my_tasks"   → tasks assigned to ME specifically (assigned_to_user_id === currentUser.id)
  *                  NOT by role — Charlie never sees Bob's tasks
+ *                  NOT by role — Abhinav never sees Lakshay's tasks
  *   "all"        → all open tasks (optional full view)
  */
 

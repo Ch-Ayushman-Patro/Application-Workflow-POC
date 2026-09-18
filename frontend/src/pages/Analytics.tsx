@@ -24,7 +24,7 @@ import {
   Inbox,
   Flame
 } from "lucide-react";
-import { formatHoursToDaysAndHours, formatApplicationAge, getApplicationRisk } from "../utils/formatters";
+import { formatHoursToDaysAndHours, formatElapsedTime, getApplicationRisk } from "../utils/formatters";
 import { useRole } from "../context/RoleContext";
 import { useAnalyticsSummary, useApplications, useTasks } from "../hooks/useWorkflowQueries";
 
@@ -393,7 +393,7 @@ export default function Analytics() {
                   >
                     <div>
                       <div className="font-mono font-bold text-indigo-300">{app.application_number}</div>
-                      <div className="text-[11px] text-slate-400">{formatApplicationAge(app.created_at)} old</div>
+                      <div className="text-[11px] text-slate-400">{formatElapsedTime(app.created_at)}</div>
                     </div>
                     <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
                   </Link>
@@ -515,7 +515,7 @@ export default function Analytics() {
                       <ArrowUpRight className="w-3 h-3 text-slate-400" />
                     </Link>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      Stage: <span className="text-slate-700 font-medium">{app.current_stage || "Intake"}</span> · Owned by: <span className="text-slate-700 font-medium">{app.claimed_by?.name || "Unassigned"}</span> · {formatApplicationAge(app.created_at)} old
+                      Stage: <span className="text-slate-700 font-medium">{app.current_stage || "Intake"}</span> · Owned by: <span className="text-slate-700 font-medium">{app.claimed_by?.name || "Unassigned"}</span> · {formatElapsedTime(app.created_at)}
                     </div>
                   </div>
                 </div>
